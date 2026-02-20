@@ -16,33 +16,48 @@ export type Database = {
     Tables: {
       attendance: {
         Row: {
+          browser: string | null
           created_at: string
           device_info: string | null
+          device_type: string | null
           id: string
+          ip_address: string | null
           latitude: number
+          location_address: string | null
           longitude: number
+          operating_system: string | null
           staff_name: string
           status: string
           timestamp: string
           user_id: string
         }
         Insert: {
+          browser?: string | null
           created_at?: string
           device_info?: string | null
+          device_type?: string | null
           id?: string
+          ip_address?: string | null
           latitude: number
+          location_address?: string | null
           longitude: number
+          operating_system?: string | null
           staff_name: string
           status?: string
           timestamp?: string
           user_id: string
         }
         Update: {
+          browser?: string | null
           created_at?: string
           device_info?: string | null
+          device_type?: string | null
           id?: string
+          ip_address?: string | null
           latitude?: number
+          location_address?: string | null
           longitude?: number
+          operating_system?: string | null
           staff_name?: string
           status?: string
           timestamp?: string
