@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle2, Clock, MapPin, LogOut, Loader2, XCircle } from "lucide-react";
 import { format } from "date-fns";
+import { parseDeviceInfo } from "@/lib/device-info";
 
 const StaffDashboard = () => {
   const { user, profile, signOut } = useAuth();
@@ -53,13 +54,18 @@ const StaffDashboard = () => {
     const status = now > lateThreshold ? "late" : "present";
 
     setMarking(true);
+    const ua = navigator.userAgent;
+    const { browser, operating_system, device_type } = parseDeviceInfo(ua);
     const { error } = await supabase.from("attendance").insert({
       user_id: user.id,
       staff_name: profile.name,
       latitude,
       longitude,
       status,
-      device_info: navigator.userAgent,
+      device_info: ua,
+      browser,
+      operating_system,
+      device_type,
     });
     setMarking(false);
 
