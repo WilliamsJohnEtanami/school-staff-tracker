@@ -6,6 +6,9 @@ import {
   MapPin, Clock, Shield, Smartphone, BarChart3,
   Users, CheckCircle, ArrowRight, GraduationCap
 } from "lucide-react";
+import dashboardMockup from "@/assets/dashboard-mockup.png";
+import mobileCheckin from "@/assets/mobile-checkin.png";
+import geofenceIllustration from "@/assets/geofence-illustration.png";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -42,7 +45,7 @@ const Landing = () => {
         <div className="absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-primary/10 blur-3xl" />
         <div className="absolute bottom-1/4 -right-32 w-96 h-96 rounded-full bg-accent/10 blur-3xl" />
 
-        <div className="relative z-10 max-w-4xl mx-auto text-center space-y-8">
+        <div className="relative z-10 max-w-6xl mx-auto text-center space-y-8">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -85,6 +88,24 @@ const Landing = () => {
               See How It Works
             </Button>
           </motion.div>
+
+          {/* Dashboard Mockup */}
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7, duration: 0.8 }}
+            className="pt-8"
+          >
+            <div className="relative mx-auto max-w-4xl rounded-xl overflow-hidden shadow-2xl border border-border/50">
+              <img
+                src={dashboardMockup}
+                alt="School attendance dashboard showing GPS map, staff list, and analytics charts"
+                className="w-full h-auto"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-background/20 to-transparent pointer-events-none" />
+            </div>
+          </motion.div>
         </div>
 
         <motion.div
@@ -101,6 +122,44 @@ const Landing = () => {
             />
           </div>
         </motion.div>
+      </section>
+
+      {/* Geofence Showcase */}
+      <section className="py-24 px-4">
+        <div className="max-w-6xl mx-auto">
+          <motion.div
+            initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }}
+            className="grid md:grid-cols-2 gap-12 items-center"
+          >
+            <motion.div variants={fadeUp} custom={0} className="space-y-6">
+              <h2 className="text-3xl sm:text-4xl font-bold">
+                GPS Geofencing,{" "}
+                <span className="text-primary">Built for Schools</span>
+              </h2>
+              <p className="text-muted-foreground text-lg leading-relaxed">
+                Set a virtual boundary around your school. Staff can only mark
+                attendance when they're physically within the geofenced radius —
+                eliminating proxy attendance and buddy punching.
+              </p>
+              <ul className="space-y-3">
+                {["Automatic location detection", "Configurable radius boundary", "Real-time position verification"].map((item) => (
+                  <li key={item} className="flex items-center gap-3 text-muted-foreground">
+                    <CheckCircle className="w-5 h-5 text-primary shrink-0" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+            <motion.div variants={fadeUp} custom={1}>
+              <img
+                src={geofenceIllustration}
+                alt="School building with GPS geofence boundary showing staff location pins"
+                className="w-full max-w-md mx-auto rounded-2xl"
+                loading="lazy"
+              />
+            </motion.div>
+          </motion.div>
+        </div>
       </section>
 
       {/* Features */}
@@ -139,8 +198,46 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Mobile Check-in Showcase */}
+      <section className="py-24 px-4">
+        <div className="max-w-6xl mx-auto">
+          <motion.div
+            initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }}
+            className="grid md:grid-cols-2 gap-12 items-center"
+          >
+            <motion.div variants={fadeUp} custom={0} className="order-2 md:order-1">
+              <img
+                src={mobileCheckin}
+                alt="Mobile phone showing GPS attendance check-in with location verification"
+                className="w-full max-w-xs mx-auto"
+                loading="lazy"
+              />
+            </motion.div>
+            <motion.div variants={fadeUp} custom={1} className="space-y-6 order-1 md:order-2">
+              <h2 className="text-3xl sm:text-4xl font-bold">
+                Clock In from{" "}
+                <span className="text-primary">Any Device</span>
+              </h2>
+              <p className="text-muted-foreground text-lg leading-relaxed">
+                No app downloads needed. Staff simply open their browser, log in,
+                and tap once to clock in. The system instantly verifies their
+                location, device, and time.
+              </p>
+              <ul className="space-y-3">
+                {["Works on any smartphone or tablet", "No app installation required", "One-tap attendance marking"].map((item) => (
+                  <li key={item} className="flex items-center gap-3 text-muted-foreground">
+                    <CheckCircle className="w-5 h-5 text-primary shrink-0" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+          </motion.div>
+        </div>
+      </section>
+
       {/* How It Works */}
-      <section id="how-it-works" className="py-24 px-4">
+      <section id="how-it-works" className="py-24 px-4 bg-secondary/30">
         <div className="max-w-4xl mx-auto">
           <motion.div
             initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }}
