@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -27,8 +27,10 @@ const Login = () => {
   };
 
   // Redirect if already logged in
-  if (role === "admin") { navigate("/admin", { replace: true }); return null; }
-  if (role === "staff") { navigate("/staff", { replace: true }); return null; }
+  useEffect(() => {
+    if (role === "admin") navigate("/admin", { replace: true });
+    else if (role === "staff") navigate("/staff", { replace: true });
+  }, [role, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
