@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { LocationProvider } from "@/contexts/LocationContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import LocationGate from "@/components/LocationGate";
+import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import StaffDashboard from "@/pages/StaffDashboard";
 import AdminLayout from "@/components/AdminLayout";
@@ -27,7 +28,7 @@ const App = () => (
         <AuthProvider>
           <LocationProvider>
             <Routes>
-              <Route path="/" element={<Navigate to="/login" replace />} />
+              <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/staff" element={
                 <ProtectedRoute requiredRole="staff">
