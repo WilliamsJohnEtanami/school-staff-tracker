@@ -19,19 +19,19 @@ const fadeUp = {
 };
 
 const features = [
-  { icon: MapPin, title: "GPS Verification", desc: "Attendance is only accepted when staff are within the school's geofenced radius." },
-  { icon: Clock, title: "Real-Time Tracking", desc: "Instant dashboard updates the moment staff clock in — no delays." },
-  { icon: Shield, title: "Tamper-Proof", desc: "Device fingerprinting, IP logging, and location validation prevent fraud." },
-  { icon: Smartphone, title: "Mobile First", desc: "Works seamlessly on any phone or tablet — no app install required." },
-  { icon: BarChart3, title: "Smart Reports", desc: "Export attendance data to Excel or CSV with advanced filters and analytics." },
-  { icon: Users, title: "Staff Management", desc: "Add, deactivate, or manage staff accounts from one admin panel." },
+  { icon: MapPin, title: "Location Check", desc: "Staff must be on school grounds to mark attendance. If they're not there, it won't go through." },
+  { icon: Clock, title: "Live Updates", desc: "The admin dashboard updates the moment someone clocks in. No waiting, no refreshing." },
+  { icon: Shield, title: "Hard to Cheat", desc: "We log device info, IP addresses, and GPS coordinates. Faking attendance becomes really difficult." },
+  { icon: Smartphone, title: "Works on Phones", desc: "Open a browser, log in, tap once. That's it. No app store, no downloads, no hassle." },
+  { icon: BarChart3, title: "Export Reports", desc: "Pull attendance data into Excel or CSV. Filter by date, status, or staff member." },
+  { icon: Users, title: "Manage Staff", desc: "Add new teachers, deactivate old accounts, reset passwords — all from one screen." },
 ];
 
 const steps = [
-  { num: "01", title: "Admin Sets Location", desc: "Stand inside the school, click detect, and the GPS boundary is saved automatically." },
-  { num: "02", title: "Staff Logs In", desc: "Each staff member signs in with their unique credentials on any device." },
-  { num: "03", title: "Mark Attendance", desc: "One tap to clock in — the system verifies location, time, and device instantly." },
-  { num: "04", title: "Admin Reviews", desc: "View real-time dashboards, filter by date or status, and export reports." },
+  { num: "1", title: "Set your school's location", desc: "Open settings, stand inside the school, and hit detect. The GPS boundary saves automatically." },
+  { num: "2", title: "Add your staff", desc: "Create accounts for each teacher or staff member. They'll get login credentials via email." },
+  { num: "3", title: "Staff clocks in daily", desc: "They open the site on their phone, tap 'Clock In,' and the system checks their location on the spot." },
+  { num: "4", title: "You review everything", desc: "Check who showed up, who was late, who didn't come. Export the data whenever you need it." },
 ];
 
 const Landing = () => {
@@ -42,37 +42,35 @@ const Landing = () => {
       {/* Hero */}
       <section className="relative min-h-screen flex items-center justify-center px-4">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/5" />
-        <div className="absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute bottom-1/4 -right-32 w-96 h-96 rounded-full bg-accent/10 blur-3xl" />
 
-        <div className="relative z-10 max-w-6xl mx-auto text-center space-y-8">
+        <div className="relative z-10 max-w-5xl mx-auto text-center space-y-8">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.6 }}
-            className="mx-auto w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center"
+            className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center"
           >
-            <GraduationCap className="w-10 h-10 text-primary" />
+            <GraduationCap className="w-8 h-8 text-primary" />
           </motion.div>
 
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.6 }}
-            className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-tight"
+            className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-tight"
           >
-            Staff Attendance,{" "}
-            <span className="text-primary">Verified by Location</span>
+            Know who's actually at school.
           </motion.h1>
 
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35, duration: 0.6 }}
-            className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto"
+            className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto"
           >
-            A GPS-powered attendance system built for schools. No buddy punching,
-            no guesswork — just verified, real-time presence tracking.
+            A simple attendance system that uses GPS to verify staff are
+            physically at school before they can clock in. No more sign-in
+            sheets, no more guessing.
           </motion.p>
 
           <motion.div
@@ -89,7 +87,7 @@ const Landing = () => {
             </Button>
           </motion.div>
 
-          {/* Dashboard Mockup */}
+          {/* Dashboard Preview */}
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
@@ -99,52 +97,36 @@ const Landing = () => {
             <div className="relative mx-auto max-w-4xl rounded-xl overflow-hidden shadow-2xl border border-border/50">
               <img
                 src={dashboardMockup}
-                alt="School attendance dashboard showing GPS map, staff list, and analytics charts"
+                alt="Admin dashboard showing staff attendance list with check-in times and a map"
                 className="w-full h-auto"
                 loading="lazy"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-background/20 to-transparent pointer-events-none" />
             </div>
           </motion.div>
         </div>
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.2, duration: 1 }}
-          className="absolute bottom-8 left-1/2 -translate-x-1/2"
-        >
-          <div className="w-6 h-10 border-2 border-muted-foreground/30 rounded-full flex justify-center pt-2">
-            <motion.div
-              animate={{ y: [0, 12, 0] }}
-              transition={{ repeat: Infinity, duration: 1.5 }}
-              className="w-1.5 h-1.5 rounded-full bg-primary"
-            />
-          </div>
-        </motion.div>
       </section>
 
-      {/* Geofence Showcase */}
-      <section className="py-24 px-4">
-        <div className="max-w-6xl mx-auto">
+      {/* Geofence Section */}
+      <section className="py-20 px-4">
+        <div className="max-w-5xl mx-auto">
           <motion.div
             initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }}
             className="grid md:grid-cols-2 gap-12 items-center"
           >
-            <motion.div variants={fadeUp} custom={0} className="space-y-6">
-              <h2 className="text-3xl sm:text-4xl font-bold">
-                GPS Geofencing,{" "}
-                <span className="text-primary">Built for Schools</span>
+            <motion.div variants={fadeUp} custom={0} className="space-y-5">
+              <h2 className="text-2xl sm:text-3xl font-bold">
+                If they're not at school, they can't clock in.
               </h2>
-              <p className="text-muted-foreground text-lg leading-relaxed">
-                Set a virtual boundary around your school. Staff can only mark
-                attendance when they're physically within the geofenced radius —
-                eliminating proxy attendance and buddy punching.
+              <p className="text-muted-foreground leading-relaxed">
+                You set a GPS boundary around your school campus. When staff try
+                to mark attendance, the system checks whether they're actually
+                inside that boundary. If they're sitting at home or at a café
+                down the road, it simply won't work.
               </p>
-              <ul className="space-y-3">
-                {["Automatic location detection", "Configurable radius boundary", "Real-time position verification"].map((item) => (
-                  <li key={item} className="flex items-center gap-3 text-muted-foreground">
-                    <CheckCircle className="w-5 h-5 text-primary shrink-0" />
+              <ul className="space-y-2.5">
+                {["You pick the center point and radius", "Location is checked every time, not just once", "Works even without a stable internet connection"].map((item) => (
+                  <li key={item} className="flex items-start gap-2.5 text-muted-foreground text-sm">
+                    <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                     <span>{item}</span>
                   </li>
                 ))}
@@ -153,8 +135,8 @@ const Landing = () => {
             <motion.div variants={fadeUp} custom={1}>
               <img
                 src={geofenceIllustration}
-                alt="School building with GPS geofence boundary showing staff location pins"
-                className="w-full max-w-md mx-auto rounded-2xl"
+                alt="Aerial view of a school campus with a GPS boundary drawn around it"
+                className="w-full max-w-sm mx-auto rounded-2xl"
                 loading="lazy"
               />
             </motion.div>
@@ -163,32 +145,32 @@ const Landing = () => {
       </section>
 
       {/* Features */}
-      <section className="py-24 px-4 bg-secondary/30">
-        <div className="max-w-6xl mx-auto">
+      <section className="py-20 px-4 bg-secondary/30">
+        <div className="max-w-5xl mx-auto">
           <motion.div
             initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }}
-            className="text-center mb-16"
+            className="text-center mb-12"
           >
-            <motion.h2 variants={fadeUp} custom={0} className="text-3xl sm:text-4xl font-bold mb-4">
-              Everything You Need
+            <motion.h2 variants={fadeUp} custom={0} className="text-2xl sm:text-3xl font-bold mb-3">
+              What you get
             </motion.h2>
-            <motion.p variants={fadeUp} custom={1} className="text-muted-foreground text-lg max-w-xl mx-auto">
-              Built specifically for school administrators who need reliable, location-verified attendance.
+            <motion.p variants={fadeUp} custom={1} className="text-muted-foreground max-w-lg mx-auto">
+              Built for school admins who are tired of paper registers and unreliable attendance records.
             </motion.p>
           </motion.div>
 
           <motion.div
             initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.1 }}
-            className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"
+            className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5"
           >
             {features.map((f, i) => (
               <motion.div key={f.title} variants={fadeUp} custom={i}>
-                <Card className="h-full border-0 shadow-md hover:shadow-lg transition-shadow bg-card">
-                  <CardContent className="p-6 space-y-3">
-                    <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <f.icon className="w-6 h-6 text-primary" />
+                <Card className="h-full border-0 shadow-sm hover:shadow-md transition-shadow bg-card">
+                  <CardContent className="p-5 space-y-2.5">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <f.icon className="w-5 h-5 text-primary" />
                     </div>
-                    <h3 className="text-lg font-semibold">{f.title}</h3>
+                    <h3 className="text-base font-semibold">{f.title}</h3>
                     <p className="text-muted-foreground text-sm leading-relaxed">{f.desc}</p>
                   </CardContent>
                 </Card>
@@ -198,9 +180,9 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Mobile Check-in Showcase */}
-      <section className="py-24 px-4">
-        <div className="max-w-6xl mx-auto">
+      {/* Mobile Section */}
+      <section className="py-20 px-4">
+        <div className="max-w-5xl mx-auto">
           <motion.div
             initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }}
             className="grid md:grid-cols-2 gap-12 items-center"
@@ -208,25 +190,24 @@ const Landing = () => {
             <motion.div variants={fadeUp} custom={0} className="order-2 md:order-1">
               <img
                 src={mobileCheckin}
-                alt="Mobile phone showing GPS attendance check-in with location verification"
-                className="w-full max-w-xs mx-auto"
+                alt="Phone screen showing a successful attendance check-in"
+                className="w-full max-w-[240px] mx-auto"
                 loading="lazy"
               />
             </motion.div>
-            <motion.div variants={fadeUp} custom={1} className="space-y-6 order-1 md:order-2">
-              <h2 className="text-3xl sm:text-4xl font-bold">
-                Clock In from{" "}
-                <span className="text-primary">Any Device</span>
+            <motion.div variants={fadeUp} custom={1} className="space-y-5 order-1 md:order-2">
+              <h2 className="text-2xl sm:text-3xl font-bold">
+                No app to install. Just open and tap.
               </h2>
-              <p className="text-muted-foreground text-lg leading-relaxed">
-                No app downloads needed. Staff simply open their browser, log in,
-                and tap once to clock in. The system instantly verifies their
-                location, device, and time.
+              <p className="text-muted-foreground leading-relaxed">
+                Your staff don't need to download anything. They open their phone
+                browser, go to the site, log in, and tap one button. Done. It
+                takes about 10 seconds once they know the process.
               </p>
-              <ul className="space-y-3">
-                {["Works on any smartphone or tablet", "No app installation required", "One-tap attendance marking"].map((item) => (
-                  <li key={item} className="flex items-center gap-3 text-muted-foreground">
-                    <CheckCircle className="w-5 h-5 text-primary shrink-0" />
+              <ul className="space-y-2.5">
+                {["Any phone with a browser and GPS works", "Staff get their own login credentials", "One tap — that's the whole process"].map((item) => (
+                  <li key={item} className="flex items-start gap-2.5 text-muted-foreground text-sm">
+                    <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                     <span>{item}</span>
                   </li>
                 ))}
@@ -237,35 +218,35 @@ const Landing = () => {
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="py-24 px-4 bg-secondary/30">
-        <div className="max-w-4xl mx-auto">
+      <section id="how-it-works" className="py-20 px-4 bg-secondary/30">
+        <div className="max-w-3xl mx-auto">
           <motion.div
             initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }}
-            className="text-center mb-16"
+            className="text-center mb-12"
           >
-            <motion.h2 variants={fadeUp} custom={0} className="text-3xl sm:text-4xl font-bold mb-4">
-              How It Works
+            <motion.h2 variants={fadeUp} custom={0} className="text-2xl sm:text-3xl font-bold mb-3">
+              How it works
             </motion.h2>
-            <motion.p variants={fadeUp} custom={1} className="text-muted-foreground text-lg">
-              Four simple steps from setup to daily tracking.
+            <motion.p variants={fadeUp} custom={1} className="text-muted-foreground">
+              Four steps. That's it.
             </motion.p>
           </motion.div>
 
           <motion.div
             initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.1 }}
-            className="space-y-8"
+            className="space-y-6"
           >
             {steps.map((s, i) => (
               <motion.div
                 key={s.num} variants={fadeUp} custom={i}
-                className="flex gap-6 items-start"
+                className="flex gap-5 items-start"
               >
-                <div className="shrink-0 w-14 h-14 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg">
+                <div className="shrink-0 w-10 h-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
                   {s.num}
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold mb-1">{s.title}</h3>
-                  <p className="text-muted-foreground leading-relaxed">{s.desc}</p>
+                  <h3 className="text-lg font-semibold mb-1">{s.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{s.desc}</p>
                 </div>
               </motion.div>
             ))}
@@ -274,19 +255,19 @@ const Landing = () => {
       </section>
 
       {/* CTA */}
-      <section className="py-24 px-4">
+      <section className="py-20 px-4">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="max-w-3xl mx-auto text-center bg-primary rounded-2xl p-12 shadow-xl"
+          className="max-w-2xl mx-auto text-center bg-primary rounded-2xl p-10 shadow-lg"
         >
-          <h2 className="text-3xl font-bold text-primary-foreground mb-4">
-            Ready to Modernize Attendance?
+          <h2 className="text-2xl font-bold text-primary-foreground mb-3">
+            Ready to ditch the paper register?
           </h2>
-          <p className="text-primary-foreground/80 text-lg mb-8">
-            Sign in now to start tracking staff attendance with GPS precision.
+          <p className="text-primary-foreground/80 mb-6">
+            Sign in and start tracking attendance today. Setup takes about 5 minutes.
           </p>
           <Button
             size="lg"
@@ -300,15 +281,13 @@ const Landing = () => {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border py-8 px-4">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
+      <footer className="border-t border-border py-6 px-4">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <GraduationCap className="w-5 h-5 text-primary" />
-            <span className="font-semibold text-foreground">Staff Attendance System</span>
+            <GraduationCap className="w-4 h-4 text-primary" />
+            <span className="font-medium text-foreground">Staff Attendance System</span>
           </div>
-          <div className="flex items-center gap-1">
-            <CheckCircle className="w-4 h-4 text-accent" /> GPS-verified attendance tracking
-          </div>
+          <span>GPS-verified attendance for schools</span>
         </div>
       </footer>
     </div>
