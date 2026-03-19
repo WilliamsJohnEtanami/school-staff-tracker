@@ -247,9 +247,8 @@ const AdminDashboard = () => {
                       <SortableHead label="Date" field="timestamp" />
                       <TableHead>Time</TableHead>
                       <SortableHead label="Status" field="status" />
+                      <TableHead>IP Address</TableHead>
                       <TableHead>Device</TableHead>
-                      <TableHead>Browser</TableHead>
-                      <TableHead>OS</TableHead>
                       <TableHead>Distance</TableHead>
                       <TableHead>Location</TableHead>
                     </TableRow>
