@@ -1,26 +1,30 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save, MapPin, Crosshair, RefreshCw, ChevronDown, CheckCircle2, ExternalLink } from "lucide-react";
+import { Loader2, Save, MapPin, Crosshair, RefreshCw, ChevronDown, CheckCircle2, ExternalLink, LogOut } from "lucide-react";
 
 const SettingsPage = () => {
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
 
   const [schoolLat, setSchoolLat] = useState("");
   const [schoolLng, setSchoolLng] = useState("");
   const [radius, setRadius] = useState("");
   const [lateTime, setLateTime] = useState("");
 
-  // GPS detection state
   const [detecting, setDetecting] = useState(false);
   const [detectedLat, setDetectedLat] = useState<number | null>(null);
   const [detectedLng, setDetectedLng] = useState<number | null>(null);
@@ -140,6 +144,11 @@ const SettingsPage = () => {
     }
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/login");
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -180,14 +189,12 @@ const SettingsPage = () => {
                 <CheckCircle2 className="h-5 w-5 text-accent" />
                 <span className="font-medium text-foreground">Location Detected</span>
               </div>
-
               {detectedAddress && (
                 <div>
                   <p className="text-xs text-muted-foreground">Address</p>
                   <p className="text-sm text-foreground">{detectedAddress}</p>
                 </div>
               )}
-
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <p className="text-xs text-muted-foreground">Latitude</p>
@@ -202,7 +209,6 @@ const SettingsPage = () => {
                   <Badge variant="outline">{detectedAccuracy?.toFixed(0)}m</Badge>
                 </div>
               </div>
-
               <a
                 href={`https://www.google.com/maps?q=${detectedLat},${detectedLng}`}
                 target="_blank"
@@ -211,7 +217,6 @@ const SettingsPage = () => {
               >
                 <ExternalLink className="h-3 w-3" /> View on Google Maps
               </a>
-
               <Button onClick={applyDetected} className="gap-2 w-full sm:w-auto">
                 <MapPin className="h-4 w-4" /> Save as School Location
               </Button>
@@ -230,7 +235,6 @@ const SettingsPage = () => {
             <div><Label>Allowed Radius (meters)</Label><Input type="number" value={radius} onChange={(e) => setRadius(e.target.value)} required /></div>
             <div><Label>Late Time Threshold</Label><Input type="time" value={lateTime} onChange={(e) => setLateTime(e.target.value)} required /></div>
 
-            {/* Collapsible manual coordinate entry */}
             <Collapsible open={showManual} onOpenChange={setShowManual}>
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" size="sm" type="button" className="gap-1 text-muted-foreground px-0">
@@ -258,6 +262,14 @@ const SettingsPage = () => {
           </form>
         </CardContent>
       </Card>
+
+      {/* Sign Out - separated at bottom */}
+      <Separator />
+      <div className="pt-2">
+        <Button variant="destructive" onClick={handleSignOut} className="gap-2">
+          <LogOut className="h-4 w-4" /> Sign Out
+        </Button>
+      </div>
     </div>
   );
 };

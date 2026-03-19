@@ -273,9 +273,8 @@ const AdminDashboard = () => {
                                     {a.status}
                                   </Badge>
                                 </TableCell>
+                                <TableCell className="text-xs font-mono">{a.ip_address ?? "—"}</TableCell>
                                 <TableCell>{a.device_type ?? "—"}</TableCell>
-                                <TableCell>{a.browser ?? "—"}</TableCell>
-                                <TableCell>{a.operating_system ?? "—"}</TableCell>
                                 <TableCell>
                                   {dist !== null ? (
                                     <Badge variant={dist <= (settings?.allowed_radius ?? 200) ? "default" : "destructive"} className={dist <= (settings?.allowed_radius ?? 200) ? "bg-accent text-accent-foreground" : ""}>
