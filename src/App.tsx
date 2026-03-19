@@ -9,6 +9,8 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import LocationGate from "@/components/LocationGate";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import StaffDashboard from "@/pages/StaffDashboard";
 import AdminLayout from "@/components/AdminLayout";
 import AdminDashboard from "@/pages/admin/Dashboard";
