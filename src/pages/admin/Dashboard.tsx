@@ -291,7 +291,7 @@ const AdminDashboard = () => {
                             </CollapsibleTrigger>
                             <CollapsibleContent asChild>
                               <tr>
-                                <td colSpan={10} className="bg-muted/30 px-6 py-4">
+                                <td colSpan={8} className="bg-muted/30 px-6 py-4">
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                                     <div>
                                       <p className="font-medium text-muted-foreground mb-1">Full Details</p>
