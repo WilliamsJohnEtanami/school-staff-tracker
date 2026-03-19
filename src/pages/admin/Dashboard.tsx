@@ -247,9 +247,8 @@ const AdminDashboard = () => {
                       <SortableHead label="Date" field="timestamp" />
                       <TableHead>Time</TableHead>
                       <SortableHead label="Status" field="status" />
+                      <TableHead>IP Address</TableHead>
                       <TableHead>Device</TableHead>
-                      <TableHead>Browser</TableHead>
-                      <TableHead>OS</TableHead>
                       <TableHead>Distance</TableHead>
                       <TableHead>Location</TableHead>
                     </TableRow>
@@ -274,9 +273,8 @@ const AdminDashboard = () => {
                                     {a.status}
                                   </Badge>
                                 </TableCell>
+                                <TableCell className="text-xs font-mono">{a.ip_address ?? "—"}</TableCell>
                                 <TableCell>{a.device_type ?? "—"}</TableCell>
-                                <TableCell>{a.browser ?? "—"}</TableCell>
-                                <TableCell>{a.operating_system ?? "—"}</TableCell>
                                 <TableCell>
                                   {dist !== null ? (
                                     <Badge variant={dist <= (settings?.allowed_radius ?? 200) ? "default" : "destructive"} className={dist <= (settings?.allowed_radius ?? 200) ? "bg-accent text-accent-foreground" : ""}>
@@ -293,7 +291,7 @@ const AdminDashboard = () => {
                             </CollapsibleTrigger>
                             <CollapsibleContent asChild>
                               <tr>
-                                <td colSpan={10} className="bg-muted/30 px-6 py-4">
+                                <td colSpan={8} className="bg-muted/30 px-6 py-4">
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                                     <div>
                                       <p className="font-medium text-muted-foreground mb-1">Full Details</p>

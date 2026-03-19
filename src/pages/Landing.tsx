@@ -1,20 +1,21 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   MapPin, Clock, Shield, Smartphone, BarChart3,
-  Users, CheckCircle, ArrowRight, GraduationCap
+  Users, CheckCircle, ArrowRight, GraduationCap, Moon, Sun
 } from "lucide-react";
 import dashboardMockup from "@/assets/dashboard-mockup.png";
 import mobileCheckin from "@/assets/mobile-checkin.png";
 import geofenceIllustration from "@/assets/geofence-illustration.png";
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
+  hidden: { opacity: 0, y: 24 },
   visible: (i: number) => ({
     opacity: 1, y: 0,
-    transition: { delay: i * 0.12, duration: 0.5, ease: "easeOut" as const },
+    transition: { delay: i * 0.1, duration: 0.45, ease: "easeOut" as const },
   }),
 };
 
@@ -36,141 +37,148 @@ const steps = [
 
 const Landing = () => {
   const navigate = useNavigate();
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+  useEffect(() => {
+    if (dark) document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
+  }, [dark]);
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
+      {/* Sticky Navbar */}
+      <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+        <div className="max-w-5xl mx-auto flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <GraduationCap className="h-6 w-6 text-primary" />
+            <span className="font-bold text-foreground text-lg">StaffTrack</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setDark(d => !d)}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </Button>
+            <Button variant="default" size="sm" onClick={() => navigate("/login")}>
+              Sign In
+            </Button>
+          </div>
+        </div>
+      </nav>
+
       {/* Hero */}
-      <section className="relative min-h-screen flex items-center justify-center px-4">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-accent/5" />
-
-        <div className="relative z-10 max-w-5xl mx-auto text-center space-y-8">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6 }}
-            className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center"
-          >
-            <GraduationCap className="w-8 h-8 text-primary" />
-          </motion.div>
-
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.6 }}
-            className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-tight"
-          >
-            Know who's actually at school.
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35, duration: 0.6 }}
-            className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto"
-          >
-            A simple attendance system that uses GPS to verify staff are
-            physically at school before they can clock in. No more sign-in
-            sheets, no more guessing.
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.6 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center"
-          >
-            <Button size="lg" className="text-base px-8 gap-2" onClick={() => navigate("/login")}>
-              Sign In <ArrowRight className="w-4 h-4" />
-            </Button>
-            <Button size="lg" variant="outline" className="text-base px-8" onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}>
-              See How It Works
-            </Button>
-          </motion.div>
-
-          {/* Dashboard Preview */}
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7, duration: 0.8 }}
-            className="pt-8"
-          >
-            <div className="relative mx-auto max-w-4xl rounded-xl overflow-hidden shadow-2xl border border-border/50">
-              <img
-                src={dashboardMockup}
-                alt="Admin dashboard showing staff attendance list with check-in times and a map"
-                className="w-full h-auto"
-                loading="lazy"
-              />
+      <section className="py-16 md:py-24 px-4">
+        <div className="max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-10 items-center">
+            <div className="space-y-6">
+              <motion.h1
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-tight"
+              >
+                Know who's actually at school.
+              </motion.h1>
+              <motion.p
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15, duration: 0.5 }}
+                className="text-base sm:text-lg text-muted-foreground max-w-md"
+              >
+                A simple attendance system that uses GPS to verify staff are
+                physically at school before they can clock in. No more sign-in
+                sheets, no more guessing.
+              </motion.p>
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.5 }}
+                className="flex flex-wrap gap-3"
+              >
+                <Button size="lg" className="text-base px-8 gap-2" onClick={() => navigate("/login")}>
+                  Get Started <ArrowRight className="w-4 h-4" />
+                </Button>
+                <Button size="lg" variant="outline" className="text-base px-8" onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}>
+                  How It Works
+                </Button>
+              </motion.div>
             </div>
-          </motion.div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2, duration: 0.6 }}
+            >
+              <div className="rounded-xl overflow-hidden shadow-xl border border-border">
+                <img
+                  src={dashboardMockup}
+                  alt="Admin dashboard showing staff attendance list"
+                  className="w-full h-auto"
+                />
+              </div>
+            </motion.div>
+          </div>
         </div>
       </section>
 
       {/* Geofence Section */}
-      <section className="py-20 px-4">
+      <section className="py-16 px-4 bg-secondary/30">
         <div className="max-w-5xl mx-auto">
           <motion.div
             initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }}
-            className="grid md:grid-cols-2 gap-12 items-center"
+            className="grid md:grid-cols-2 gap-10 items-center"
           >
-            <motion.div variants={fadeUp} custom={0} className="space-y-5">
+            <motion.div variants={fadeUp} custom={0}>
+              <img
+                src={geofenceIllustration}
+                alt="Aerial view of a school campus with a GPS boundary"
+                className="w-full max-w-sm mx-auto rounded-xl"
+                loading="lazy"
+              />
+            </motion.div>
+            <motion.div variants={fadeUp} custom={1} className="space-y-4">
               <h2 className="text-2xl sm:text-3xl font-bold">
                 If they're not at school, they can't clock in.
               </h2>
               <p className="text-muted-foreground leading-relaxed">
                 You set a GPS boundary around your school campus. When staff try
                 to mark attendance, the system checks whether they're actually
-                inside that boundary. If they're sitting at home or at a café
-                down the road, it simply won't work.
+                inside that boundary.
               </p>
-              <ul className="space-y-2.5">
-                {["You pick the center point and radius", "Location is checked every time, not just once", "Works even without a stable internet connection"].map((item) => (
-                  <li key={item} className="flex items-start gap-2.5 text-muted-foreground text-sm">
+              <ul className="space-y-2">
+                {["You pick the center point and radius", "Location is checked every time", "Works even with spotty internet"].map((item) => (
+                  <li key={item} className="flex items-start gap-2 text-muted-foreground text-sm">
                     <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                     <span>{item}</span>
                   </li>
                 ))}
               </ul>
             </motion.div>
-            <motion.div variants={fadeUp} custom={1}>
-              <img
-                src={geofenceIllustration}
-                alt="Aerial view of a school campus with a GPS boundary drawn around it"
-                className="w-full max-w-sm mx-auto rounded-2xl"
-                loading="lazy"
-              />
-            </motion.div>
           </motion.div>
         </div>
       </section>
 
       {/* Features */}
-      <section className="py-20 px-4 bg-secondary/30">
+      <section className="py-16 px-4">
         <div className="max-w-5xl mx-auto">
-          <motion.div
-            initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }}
-            className="text-center mb-12"
-          >
-            <motion.h2 variants={fadeUp} custom={0} className="text-2xl sm:text-3xl font-bold mb-3">
-              What you get
-            </motion.h2>
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }} className="text-center mb-10">
+            <motion.h2 variants={fadeUp} custom={0} className="text-2xl sm:text-3xl font-bold mb-2">What you get</motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-muted-foreground max-w-lg mx-auto">
               Built for school admins who are tired of paper registers and unreliable attendance records.
             </motion.p>
           </motion.div>
 
-          <motion.div
-            initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.1 }}
-            className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5"
-          >
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.1 }} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {features.map((f, i) => (
               <motion.div key={f.title} variants={fadeUp} custom={i}>
-                <Card className="h-full border-0 shadow-sm hover:shadow-md transition-shadow bg-card">
-                  <CardContent className="p-5 space-y-2.5">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <f.icon className="w-5 h-5 text-primary" />
+                <Card className="h-full border shadow-sm hover:shadow-md transition-shadow bg-card">
+                  <CardContent className="p-5 space-y-2">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <f.icon className="w-4 h-4 text-primary" />
                     </div>
-                    <h3 className="text-base font-semibold">{f.title}</h3>
+                    <h3 className="text-sm font-semibold">{f.title}</h3>
                     <p className="text-muted-foreground text-sm leading-relaxed">{f.desc}</p>
                   </CardContent>
                 </Card>
@@ -181,71 +189,58 @@ const Landing = () => {
       </section>
 
       {/* Mobile Section */}
-      <section className="py-20 px-4">
+      <section className="py-16 px-4 bg-secondary/30">
         <div className="max-w-5xl mx-auto">
           <motion.div
             initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }}
-            className="grid md:grid-cols-2 gap-12 items-center"
+            className="grid md:grid-cols-2 gap-10 items-center"
           >
-            <motion.div variants={fadeUp} custom={0} className="order-2 md:order-1">
-              <img
-                src={mobileCheckin}
-                alt="Phone screen showing a successful attendance check-in"
-                className="w-full max-w-[240px] mx-auto"
-                loading="lazy"
-              />
-            </motion.div>
-            <motion.div variants={fadeUp} custom={1} className="space-y-5 order-1 md:order-2">
+            <motion.div variants={fadeUp} custom={0} className="space-y-4 order-1">
               <h2 className="text-2xl sm:text-3xl font-bold">
                 No app to install. Just open and tap.
               </h2>
               <p className="text-muted-foreground leading-relaxed">
                 Your staff don't need to download anything. They open their phone
-                browser, go to the site, log in, and tap one button. Done. It
-                takes about 10 seconds once they know the process.
+                browser, go to the site, log in, and tap one button. Takes about
+                10 seconds once they know the process.
               </p>
-              <ul className="space-y-2.5">
+              <ul className="space-y-2">
                 {["Any phone with a browser and GPS works", "Staff get their own login credentials", "One tap — that's the whole process"].map((item) => (
-                  <li key={item} className="flex items-start gap-2.5 text-muted-foreground text-sm">
+                  <li key={item} className="flex items-start gap-2 text-muted-foreground text-sm">
                     <CheckCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                     <span>{item}</span>
                   </li>
                 ))}
               </ul>
             </motion.div>
+            <motion.div variants={fadeUp} custom={1} className="order-2">
+              <img
+                src={mobileCheckin}
+                alt="Phone screen showing attendance check-in"
+                className="w-full max-w-[220px] mx-auto"
+                loading="lazy"
+              />
+            </motion.div>
           </motion.div>
         </div>
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="py-20 px-4 bg-secondary/30">
+      <section id="how-it-works" className="py-16 px-4">
         <div className="max-w-3xl mx-auto">
-          <motion.div
-            initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }}
-            className="text-center mb-12"
-          >
-            <motion.h2 variants={fadeUp} custom={0} className="text-2xl sm:text-3xl font-bold mb-3">
-              How it works
-            </motion.h2>
-            <motion.p variants={fadeUp} custom={1} className="text-muted-foreground">
-              Four steps. That's it.
-            </motion.p>
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }} className="text-center mb-10">
+            <motion.h2 variants={fadeUp} custom={0} className="text-2xl sm:text-3xl font-bold mb-2">How it works</motion.h2>
+            <motion.p variants={fadeUp} custom={1} className="text-muted-foreground">Four steps. That's it.</motion.p>
           </motion.div>
 
-          <motion.div
-            initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.1 }}
-            className="space-y-6"
-          >
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.1 }} className="space-y-5">
             {steps.map((s, i) => (
-              <motion.div
-                key={s.num} variants={fadeUp} custom={i}
-                className="flex gap-5 items-start"
-              >
-                <div className="shrink-0 w-10 h-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
+              <motion.div key={s.num} variants={fadeUp} custom={i} className="flex gap-4 items-start">
+                <div className="shrink-0 w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
                   {s.num}
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold mb-1">{s.title}</h3>
+                  <h3 className="text-base font-semibold mb-0.5">{s.title}</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">{s.desc}</p>
                 </div>
               </motion.div>
@@ -255,12 +250,12 @@ const Landing = () => {
       </section>
 
       {/* CTA */}
-      <section className="py-20 px-4">
+      <section className="py-16 px-4">
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: 0.5 }}
           className="max-w-2xl mx-auto text-center bg-primary rounded-2xl p-10 shadow-lg"
         >
           <h2 className="text-2xl font-bold text-primary-foreground mb-3">
@@ -269,12 +264,7 @@ const Landing = () => {
           <p className="text-primary-foreground/80 mb-6">
             Sign in and start tracking attendance today. Setup takes about 5 minutes.
           </p>
-          <Button
-            size="lg"
-            variant="secondary"
-            className="text-base px-8 gap-2"
-            onClick={() => navigate("/login")}
-          >
+          <Button size="lg" variant="secondary" className="text-base px-8 gap-2" onClick={() => navigate("/login")}>
             Get Started <ArrowRight className="w-4 h-4" />
           </Button>
         </motion.div>
@@ -285,7 +275,7 @@ const Landing = () => {
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <GraduationCap className="w-4 h-4 text-primary" />
-            <span className="font-medium text-foreground">Staff Attendance System</span>
+            <span className="font-medium text-foreground">StaffTrack</span>
           </div>
           <span>GPS-verified attendance for schools</span>
         </div>
