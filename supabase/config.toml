@@ -1,1 +1,8 @@
 project_id = "girczahxovloachqerip"
+
+[functions.daily-alert]
+verify_jwt = false
+
+[cron]
+# Runs every day at 10:00 AM UTC — adjust to match your school's timezone
+daily-alert = { schedule = "0 10 * * 1-5", function = "daily-alert" }

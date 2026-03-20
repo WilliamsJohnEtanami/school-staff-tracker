@@ -17,6 +17,7 @@ import AdminDashboard from "@/pages/admin/Dashboard";
 import StaffManagement from "@/pages/admin/StaffManagement";
 import SettingsPage from "@/pages/admin/SettingsPage";
 import Reports from "@/pages/admin/Reports";
+import LeaveManagement from "@/pages/admin/LeaveManagement";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -50,6 +51,7 @@ const App = () => (
                 <Route path="staff" element={<StaffManagement />} />
                 <Route path="reports" element={<Reports />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="leave" element={<LeaveManagement />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

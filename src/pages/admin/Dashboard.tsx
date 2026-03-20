@@ -5,11 +5,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Users, UserCheck, UserX, Clock, ExternalLink, Loader2, Download, ChevronDown, ChevronUp, Search, ArrowUpDown } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Users, UserCheck, UserX, Clock, ExternalLink, Loader2, Download, ChevronDown, ChevronUp, Search, ArrowUpDown, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { getDistanceInMeters } from "@/lib/geo";
+import { useToast } from "@/hooks/use-toast";
 import * as XLSX from "xlsx";
 
 const PAGE_SIZE = 25;
@@ -19,9 +22,11 @@ type SortDir = "asc" | "desc";
 
 const AdminDashboard = () => {
   const [attendance, setAttendance] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
   const [staffCount, setStaffCount] = useState(0);
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [approvedLeaveToday, setApprovedLeaveToday] = useState(0);
   const [dateFrom, setDateFrom] = useState(format(new Date(), "yyyy-MM-dd"));
   const [dateTo, setDateTo] = useState(format(new Date(), "yyyy-MM-dd"));
   const [statusFilter, setStatusFilter] = useState("all");
@@ -32,17 +37,31 @@ const AdminDashboard = () => {
   const [page, setPage] = useState(0);
   const [sortKey, setSortKey] = useState<SortKey>("timestamp");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const { toast } = useToast();
+
+  // Override dialog state
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideStaffId, setOverrideStaffId] = useState("");
+  const [overrideStaffName, setOverrideStaffName] = useState("");
+  const [overrideDate, setOverrideDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [overrideTime, setOverrideTime] = useState("08:00");
+  const [overrideStatus, setOverrideStatus] = useState("present");
+  const [overrideNote, setOverrideNote] = useState("");
+  const [overrideSaving, setOverrideSaving] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [attRes, staffRes, settRes] = await Promise.all([
+    const [attRes, staffRes, settRes, leaveRes] = await Promise.all([
       supabase.from("attendance").select("*").gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59").order("timestamp", { ascending: false }).limit(5000),
-      supabase.from("profiles").select("id", { count: "exact" }).eq("status", "active"),
+      supabase.from("profiles").select("id, name, user_id, status").order("name"),
       supabase.from("settings").select("*").limit(1).maybeSingle(),
+      supabase.from("leave_requests").select("*").eq("status", "approved").lte("start_date", format(new Date(), "yyyy-MM-dd")).gte("end_date", format(new Date(), "yyyy-MM-dd")),
     ]);
     setAttendance(attRes.data ?? []);
-    setStaffCount(staffRes.count ?? 0);
+    setStaffList(staffRes.data ?? []);
+    setStaffCount((staffRes.data ?? []).filter((s: any) => s.status === "active").length);
     setSettings(settRes.data);
+    setApprovedLeaveToday((leaveRes.data ?? []).length);
     setLoading(false);
   }, [dateFrom, dateTo]);
 
@@ -93,11 +112,45 @@ const AdminDashboard = () => {
   const todayRecords = attendance.filter(a => format(new Date(a.created_at), "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd"));
   const presentCount = todayRecords.filter(a => a.status === "present").length;
   const lateCount = todayRecords.filter(a => a.status === "late").length;
-  const absentCount = Math.max(0, staffCount - todayRecords.length);
+  const absentCount = Math.max(0, staffCount - todayRecords.length - approvedLeaveToday);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("desc"); }
+  };
+
+  const handleOverrideStaffChange = (userId: string) => {
+    setOverrideStaffId(userId);
+    const staff = staffList.find(s => s.user_id === userId);
+    setOverrideStaffName(staff?.name ?? "");
+  };
+
+  const handleOverrideSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!overrideStaffId || !overrideStaffName) return;
+    setOverrideSaving(true);
+    const timestamp = new Date(`${overrideDate}T${overrideTime}:00`).toISOString();
+    const { error } = await supabase.from("attendance").insert({
+      user_id: overrideStaffId,
+      staff_name: overrideStaffName,
+      timestamp,
+      latitude: settings?.school_latitude ?? 0,
+      longitude: settings?.school_longitude ?? 0,
+      status: overrideStatus,
+      device_info: `Manual override${overrideNote ? `: ${overrideNote}` : ""}`,
+      device_type: "Manual",
+      browser: "Admin Override",
+      operating_system: "N/A",
+    });
+    setOverrideSaving(false);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Record Added", description: `Attendance manually recorded for ${overrideStaffName}.` });
+      setOverrideOpen(false);
+      setOverrideNote("");
+      fetchData();
+    }
   };
 
   const buildExportData = () => filtered.map(a => ({
@@ -186,7 +239,57 @@ const AdminDashboard = () => {
         <CardHeader>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <CardTitle className="text-lg">Attendance Records</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Dialog open={overrideOpen} onOpenChange={setOverrideOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-1"><Plus className="h-4 w-4" /> Add Record</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Manual Attendance Override</DialogTitle></DialogHeader>
+                  <form onSubmit={handleOverrideSubmit} className="space-y-4">
+                    <div>
+                      <Label>Staff Member</Label>
+                      <Select value={overrideStaffId} onValueChange={handleOverrideStaffChange} required>
+                        <SelectTrigger><SelectValue placeholder="Select staff..." /></SelectTrigger>
+                        <SelectContent>
+                          {staffList.map(s => (
+                            <SelectItem key={s.user_id} value={s.user_id}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Date</Label>
+                        <Input type="date" value={overrideDate} onChange={e => setOverrideDate(e.target.value)} required />
+                      </div>
+                      <div>
+                        <Label>Time</Label>
+                        <Input type="time" value={overrideTime} onChange={e => setOverrideTime(e.target.value)} required />
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Status</Label>
+                      <Select value={overrideStatus} onValueChange={setOverrideStatus}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="present">Present</SelectItem>
+                          <SelectItem value="late">Late</SelectItem>
+                          <SelectItem value="absent">Absent</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Reason / Note (optional)</Label>
+                      <Input placeholder="e.g. GPS failure, off-site duty..." value={overrideNote} onChange={e => setOverrideNote(e.target.value)} />
+                    </div>
+                    <Button type="submit" disabled={overrideSaving || !overrideStaffId} className="w-full">
+                      {overrideSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      Save Record
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
               <Button variant="outline" size="sm" onClick={exportCSV} disabled={filtered.length === 0}>
                 <Download className="h-4 w-4 mr-1" /> CSV
               </Button>
@@ -219,6 +322,7 @@ const AdminDashboard = () => {
                 <SelectItem value="Desktop">Desktop</SelectItem>
                 <SelectItem value="Mobile">Mobile</SelectItem>
                 <SelectItem value="Tablet">Tablet</SelectItem>
+                <SelectItem value="Manual">Manual</SelectItem>
               </SelectContent>
             </Select>
             <Select value={complianceFilter} onValueChange={setComplianceFilter}>
@@ -257,15 +361,19 @@ const AdminDashboard = () => {
                     {paged.map(a => {
                       const dist = calcDistance(a.latitude, a.longitude);
                       const isExpanded = expandedRow === a.id;
+                      const isManual = a.device_type === "Manual";
                       return (
                         <Collapsible key={a.id} open={isExpanded} onOpenChange={() => setExpandedRow(isExpanded ? null : a.id)} asChild>
                           <>
                             <CollapsibleTrigger asChild>
-                              <TableRow className="cursor-pointer">
+                              <TableRow className={`cursor-pointer ${isManual ? "bg-muted/40" : ""}`}>
                                 <TableCell className="w-8 p-2">
                                   {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                                 </TableCell>
-                                <TableCell className="font-medium">{a.staff_name}</TableCell>
+                                <TableCell className="font-medium">
+                                  {a.staff_name}
+                                  {isManual && <span className="ml-1 text-xs text-muted-foreground">(manual)</span>}
+                                </TableCell>
                                 <TableCell>{format(new Date(a.timestamp), "MMM d, yyyy")}</TableCell>
                                 <TableCell>{format(new Date(a.timestamp), "h:mm a")}</TableCell>
                                 <TableCell>
@@ -276,16 +384,18 @@ const AdminDashboard = () => {
                                 <TableCell className="text-xs font-mono">{a.ip_address ?? "—"}</TableCell>
                                 <TableCell>{a.device_type ?? "—"}</TableCell>
                                 <TableCell>
-                                  {dist !== null ? (
+                                  {isManual ? "—" : dist !== null ? (
                                     <Badge variant={dist <= (settings?.allowed_radius ?? 200) ? "default" : "destructive"} className={dist <= (settings?.allowed_radius ?? 200) ? "bg-accent text-accent-foreground" : ""}>
                                       {Math.round(dist)}m
                                     </Badge>
                                   ) : "—"}
                                 </TableCell>
                                 <TableCell>
-                                  <a href={`https://www.google.com/maps?q=${a.latitude},${a.longitude}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 text-sm" onClick={e => e.stopPropagation()}>
-                                    <ExternalLink className="h-3 w-3" /> Map
-                                  </a>
+                                  {isManual ? "—" : (
+                                    <a href={`https://www.google.com/maps?q=${a.latitude},${a.longitude}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 text-sm" onClick={e => e.stopPropagation()}>
+                                      <ExternalLink className="h-3 w-3" /> Map
+                                    </a>
+                                  )}
                                 </TableCell>
                               </TableRow>
                             </CollapsibleTrigger>
@@ -296,8 +406,11 @@ const AdminDashboard = () => {
                                     <div>
                                       <p className="font-medium text-muted-foreground mb-1">Full Details</p>
                                       <p><span className="text-muted-foreground">User ID:</span> {a.user_id}</p>
-                                      <p><span className="text-muted-foreground">Full Timestamp:</span> {a.timestamp}</p>
-                                      <p><span className="text-muted-foreground">Created At:</span> {a.created_at}</p>
+                                      <p><span className="text-muted-foreground">Clock In:</span> {format(new Date(a.timestamp), "h:mm a")}</p>
+                                      <p><span className="text-muted-foreground">Clock Out:</span> {a.clock_out ? format(new Date(a.clock_out), "h:mm a") : "Not clocked out"}</p>
+                                      {a.clock_out && (
+                                        <p><span className="text-muted-foreground">Hours Worked:</span> {((new Date(a.clock_out).getTime() - new Date(a.timestamp).getTime()) / 3600000).toFixed(1)}h</p>
+                                      )}
                                       <p><span className="text-muted-foreground">IP Address:</span> {a.ip_address ?? "N/A"}</p>
                                     </div>
                                     <div>
@@ -305,9 +418,11 @@ const AdminDashboard = () => {
                                       <p><span className="text-muted-foreground">Latitude:</span> {a.latitude}</p>
                                       <p><span className="text-muted-foreground">Longitude:</span> {a.longitude}</p>
                                       <p><span className="text-muted-foreground">Address:</span> {a.location_address ?? "N/A"}</p>
-                                      <a href={`https://www.google.com/maps?q=${a.latitude},${a.longitude}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 mt-1">
-                                        <ExternalLink className="h-3 w-3" /> Open in Google Maps
-                                      </a>
+                                      {!isManual && (
+                                        <a href={`https://www.google.com/maps?q=${a.latitude},${a.longitude}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 mt-1">
+                                          <ExternalLink className="h-3 w-3" /> Open in Google Maps
+                                        </a>
+                                      )}
                                     </div>
                                     <div>
                                       <p className="font-medium text-muted-foreground mb-1">Device Info</p>
@@ -328,7 +443,6 @@ const AdminDashboard = () => {
                 </Table>
               </div>
 
-              {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4">
                   <p className="text-sm text-muted-foreground">
