@@ -28,8 +28,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
       supabase.from("profiles").select("name, email, status").eq("user_id", userId).maybeSingle(),
     ]);
-    setRole((roleRes.data?.role as UserRole) ?? null);
-    setProfile(profileRes.data ?? null);
+    const fetchedRole = (roleRes.data?.role as UserRole) ?? null;
+    const fetchedProfile = profileRes.data ?? null;
+    if (fetchedRole === "staff" && fetchedProfile?.status === "inactive") {
+      await supabase.auth.signOut();
+      return;
+    }
+    setRole(fetchedRole);
+    setProfile(fetchedProfile);
   };
 
   useEffect(() => {

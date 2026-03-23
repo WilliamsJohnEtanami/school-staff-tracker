@@ -24,6 +24,8 @@ const SettingsPage = () => {
   const [schoolLng, setSchoolLng] = useState("");
   const [radius, setRadius] = useState("");
   const [lateTime, setLateTime] = useState("");
+  const [alertTime, setAlertTime] = useState("");
+  const [alertEmail, setAlertEmail] = useState("");
 
   const [detecting, setDetecting] = useState(false);
   const [detectedLat, setDetectedLat] = useState<number | null>(null);
@@ -42,6 +44,8 @@ const SettingsPage = () => {
         setSchoolLng(data.school_longitude.toString());
         setRadius(data.allowed_radius.toString());
         setLateTime(data.late_time.substring(0, 5));
+        setAlertTime(data.alert_time ? data.alert_time.substring(0, 5) : "10:00");
+        setAlertEmail(data.alert_email ?? "");
       }
       setLoading(false);
     };
@@ -135,6 +139,8 @@ const SettingsPage = () => {
       school_longitude: parseFloat(schoolLng),
       allowed_radius: parseInt(radius),
       late_time: lateTime + ":00",
+      alert_time: alertTime + ":00",
+      alert_email: alertEmail,
     }).eq("id", settings.id);
     setSaving(false);
     if (error) {
@@ -234,6 +240,8 @@ const SettingsPage = () => {
           <form onSubmit={handleSave} className="space-y-4 max-w-md">
             <div><Label>Allowed Radius (meters)</Label><Input type="number" value={radius} onChange={(e) => setRadius(e.target.value)} required /></div>
             <div><Label>Late Time Threshold</Label><Input type="time" value={lateTime} onChange={(e) => setLateTime(e.target.value)} required /></div>
+            <div><Label>Daily Alert Time</Label><Input type="time" value={alertTime} onChange={(e) => setAlertTime(e.target.value)} /><p className="text-xs text-muted-foreground mt-1">Time to send the daily absent staff alert email.</p></div>
+            <div><Label>Alert Email Address</Label><Input type="email" placeholder="admin@school.edu" value={alertEmail} onChange={(e) => setAlertEmail(e.target.value)} /><p className="text-xs text-muted-foreground mt-1">Who receives the daily alert. Leave blank to disable.</p></div>
 
             <Collapsible open={showManual} onOpenChange={setShowManual}>
               <CollapsibleTrigger asChild>

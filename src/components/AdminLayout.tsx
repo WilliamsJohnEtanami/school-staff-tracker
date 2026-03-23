@@ -1,12 +1,13 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, Users, Settings, FileText, LogOut, GraduationCap } from "lucide-react";
+import { LayoutDashboard, Users, Settings, FileText, LogOut, GraduationCap, CalendarOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
   { to: "/admin/staff", icon: Users, label: "Staff" },
+  { to: "/admin/leave", icon: CalendarOff, label: "Leave" },
   { to: "/admin/reports", icon: FileText, label: "Reports" },
   { to: "/admin/settings", icon: Settings, label: "Settings" },
 ];
