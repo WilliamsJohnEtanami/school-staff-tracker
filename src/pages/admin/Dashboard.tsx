@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import NotificationsPanel from "@/components/NotificationsPanel";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -233,6 +234,8 @@ const AdminDashboard = () => {
           </Card>
         ))}
       </div>
+
+      <NotificationsPanel isAdmin />
 
       {/* Attendance Table */}
       <Card>

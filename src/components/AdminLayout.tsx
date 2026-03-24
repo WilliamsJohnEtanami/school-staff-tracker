@@ -1,8 +1,9 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, Users, Settings, FileText, LogOut, GraduationCap, CalendarOff, BarChart, Calendar } from "lucide-react";
+import { LayoutDashboard, Users, Settings, FileText, LogOut, GraduationCap, CalendarOff, BarChart, Calendar, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useNotificationCount } from "@/hooks/use-notification-count";
 
 const navItems = [
   { to: "/admin/analytics", icon: BarChart, label: "Analytics", end: true },
@@ -11,12 +12,14 @@ const navItems = [
   { to: "/admin/calendar", icon: Calendar, label: "School Calendar" },
   { to: "/admin/leave", icon: CalendarOff, label: "Leave" },
   { to: "/admin/reports", icon: FileText, label: "Reports" },
+  { to: "/notifications", icon: FileText, label: "Notifications" },
   { to: "/admin/settings", icon: Settings, label: "Settings" },
 ];
 
 const AdminLayout = () => {
   const { signOut, profile } = useAuth();
   const navigate = useNavigate();
+  const { unreadCount } = useNotificationCount();
 
   const handleSignOut = async () => {
     await signOut();
@@ -32,6 +35,10 @@ const AdminLayout = () => {
           <div>
             <h1 className="font-bold text-lg">Attendance</h1>
             <p className="text-xs opacity-80">Admin Panel</p>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            <span className="text-xs font-semibold">{unreadCount} unread</span>
           </div>
         </div>
         <nav className="flex-1 px-3 space-y-1">

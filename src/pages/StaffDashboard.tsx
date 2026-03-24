@@ -1,7 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "@/contexts/LocationContext";
 import { Button } from "@/components/ui/button";
+import { useNotificationCount } from "@/hooks/use-notification-count";
+import NotificationsPanel from "@/components/NotificationsPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +28,7 @@ type SessionState = "NOT_CLOCKED_IN" | "IN_WORK" | "IN_BREAK" | "IN_OFFSITE" | "
 const StaffDashboard = () => {
   const { user, profile, signOut } = useAuth();
   const { latitude, longitude } = useLocation();
+  const { unreadCount } = useNotificationCount();
   const { toast } = useToast();
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -127,9 +131,14 @@ const StaffDashboard = () => {
           <h1 className="text-lg font-bold">Staff Dashboard</h1>
           <p className="text-sm opacity-90">Welcome, {profile?.name || MOCK_PROFILE.name}</p>
         </div>
-        <Button variant="ghost" size="icon" onClick={signOut} className="text-primary-foreground hover:bg-primary/80">
-          <LogOut className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link to="/notifications" className="px-3 py-1 rounded-md bg-secondary text-secondary-foreground text-sm">
+            Notifications {unreadCount > 0 ? `(${unreadCount})` : ""}
+          </Link>
+          <Button variant="ghost" size="icon" onClick={signOut} className="text-primary-foreground hover:bg-primary/80">
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </div>
       </header>
 
       <main className="p-4 max-w-lg mx-auto space-y-4">
@@ -200,6 +209,8 @@ const StaffDashboard = () => {
             <p className="text-xs text-muted-foreground">Location card will show live distance check once DB is connected.</p>
           </CardContent>
         </Card>
+
+        <NotificationsPanel />
       </main>
     </div>
   );

@@ -21,6 +21,7 @@ import Reports from "@/pages/admin/Reports";
 import LeaveManagement from "@/pages/admin/LeaveManagement";
 import AnalyticsPage from "@/pages/admin/Analytics";
 import CalendarPage from "@/pages/admin/Calendar";
+import NotificationsPage from "@/pages/NotificationsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -61,6 +62,11 @@ const App = () => (
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="leave" element={<LeaveManagement />} />
               </Route>
+              <Route path="/notifications" element={
+                <ProtectedRoute>
+                  <NotificationsPage />
+                </ProtectedRoute>
+              } />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </LocationProvider>
