@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LocationProvider } from "@/contexts/LocationContext";
+import { CalendarProvider } from "@/contexts/CalendarContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import LocationGate from "@/components/LocationGate";
 import Landing from "@/pages/Landing";
@@ -46,7 +47,9 @@ const App = () => (
               } />
               <Route path="/admin" element={
                 <ProtectedRoute requiredRole="admin">
-                  <AdminLayout />
+                  <CalendarProvider>
+                    <AdminLayout />
+                  </CalendarProvider>
                 </ProtectedRoute>
               }>
                 <Route index element={<Navigate to="/admin/analytics" replace />} />
