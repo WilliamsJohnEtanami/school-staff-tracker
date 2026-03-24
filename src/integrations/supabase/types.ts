@@ -143,6 +143,54 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          id: string
+          title: string
+          message: string
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          message: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          message?: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      notification_statuses: {
+        Row: {
+          id: string
+          notification_id: string
+          user_id: string
+          read: boolean
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          notification_id: string
+          user_id: string
+          read?: boolean
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          notification_id?: string
+          user_id?: string
+          read?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
