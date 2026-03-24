@@ -191,6 +191,45 @@ export type Database = {
         }
         Relationships: []
       }
+      leave_requests: {
+        Row: {
+          id: string
+          user_id: string
+          staff_name: string
+          start_date: string
+          end_date: string
+          reason: string | null
+          status: string
+          admin_note: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          staff_name: string
+          start_date: string
+          end_date: string
+          reason?: string | null
+          status?: string
+          admin_note?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          staff_name?: string
+          start_date?: string
+          end_date?: string
+          reason?: string | null
+          status?: string
+          admin_note?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
