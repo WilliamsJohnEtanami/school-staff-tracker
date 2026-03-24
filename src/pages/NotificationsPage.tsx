@@ -14,7 +14,7 @@ const NotificationsPage = () => {
           Go Back
         </Link>
       </div>
-      <NotificationsPanel />
+      <NotificationsPanel enableBroadcast />
     </div>
   );
 };
