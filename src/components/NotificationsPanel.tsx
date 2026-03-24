@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useSchemaHealth } from "@/hooks/use-schema-health";
 
 export type Notification = {
   id: string;
@@ -29,6 +30,7 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
   const { user } = useAuth();
   const userId = user?.id;
   const { toast } = useToast();
+  const schemaHealth = useSchemaHealth();
   const [schemaError, setSchemaError] = useState<string | null>(null);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -164,16 +166,22 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
   };
 
   useEffect(() => {
-    fetchNotifications();
+    if (!schemaHealth.loading) {
+      fetchNotifications();
+    }
     const channel = supabase
       .channel("notifications_channel")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, fetchNotifications)
       .subscribe();
 
+    // Fallback polling every 30 seconds in case realtime fails
+    const pollInterval = setInterval(fetchNotifications, 30000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
-  }, [userId]);
+  }, [userId, schemaHealth.loading]);
 
   return (
     <Card className="space-y-4">
