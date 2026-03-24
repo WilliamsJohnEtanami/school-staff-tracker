@@ -14,6 +14,12 @@ import { format, differenceInMinutes } from "date-fns";
 // --- Mock Data ---
 const MOCK_CONTRACT = { contractedHours: 8.0 };
 const MOCK_PROFILE = { name: "Sunday Solomon" }; // Using mock profile as useAuth is not fully mocked here
+
+const DEMO_NOTIFICATIONS = [
+  { id: "demo-1", title: "Welcome to School Staff Tracker", message: "Use the notification page to see all broadcasts and staff requests.", created_at: new Date().toISOString() },
+  { id: "demo-2", title: "System Update", message: "New leave categories added in the next release.", created_at: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString() },
+  { id: "demo-3", title: "Reminder", message: "Submit your weekly report before Friday 5 PM.", created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() },
+];
 // --- End Mock Data ---
 
 type SessionType = "work" | "break" | "off-site";
@@ -207,6 +213,21 @@ const StaffDashboard = () => {
           <CardContent className="space-y-2">
             <p className="text-sm text-muted-foreground">Lat: {latitude?.toFixed(4) ?? '...'}, Lng: {longitude?.toFixed(4) ?? '...'}</p>
             <p className="text-xs text-muted-foreground">Location card will show live distance check once DB is connected.</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Latest Notifications (Demo)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {DEMO_NOTIFICATIONS.map((notif) => (
+              <div key={notif.id} className="border rounded-lg p-3">
+                <p className="font-semibold">{notif.title}</p>
+                <p className="text-sm text-muted-foreground">{notif.message}</p>
+                <p className="text-xs text-muted-foreground mt-1">{format(new Date(notif.created_at), "MMM d, yyyy h:mm a")}</p>
+              </div>
+            ))}
           </CardContent>
         </Card>
 
