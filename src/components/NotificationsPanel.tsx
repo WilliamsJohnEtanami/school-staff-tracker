@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -46,7 +46,7 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
     [notifications, statuses]
   );
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
     setSchemaError(null);
@@ -83,7 +83,7 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
     }
 
     setLoading(false);
-  };
+  }, [userId, toast]);
 
   const setAsRead = async (notificationId: string) => {
     if (!userId) return;
@@ -181,7 +181,7 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
       supabase.removeChannel(channel);
       clearInterval(pollInterval);
     };
-  }, [userId, schemaHealth.loading]);
+  }, [userId, schemaHealth.loading, fetchNotifications]);
 
   return (
     <Card className="space-y-4">
