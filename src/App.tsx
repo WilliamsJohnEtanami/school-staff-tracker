@@ -12,7 +12,7 @@ import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
-import StaffDashboard from "@/pages/StaffDashboard";
+import StaffDashboard from "@/pages/staff/StaffDashboard";
 import AdminLayout from "@/components/AdminLayout";
 import AdminDashboard from "@/pages/admin/Dashboard";
 import StaffManagement from "@/pages/admin/StaffManagement";
@@ -38,13 +38,20 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+
               <Route path="/staff" element={
                 <ProtectedRoute requiredRole="staff">
                   <LocationGate>
                     <StaffDashboard />
                   </LocationGate>
                 </ProtectedRoute>
-              } />
+              }>
+                <Route index element={<Navigate to="/staff/attendance" replace />} />
+                <Route path="attendance" element={<StaffDashboard />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route path="leave" element={<LeaveManagement />} />
+              </Route>
+
               <Route path="/admin" element={
                 <ProtectedRoute requiredRole="admin">
                   <CalendarProvider>
