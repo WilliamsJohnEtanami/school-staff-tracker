@@ -26,6 +26,30 @@ export type NotificationStatus = {
   updated_at: string;
 };
 
+const DEMO_NOTIFICATIONS: Notification[] = [
+  {
+    id: "demo-1",
+    title: "Welcome to Staff Tracker",
+    message: "This is a demo notification. You're all set to start using the app.",
+    created_by: null,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "demo-2",
+    title: "Weekly Check-in",
+    message: "Please remember to submit your weekly attendance report by Friday.",
+    created_by: null,
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+  },
+  {
+    id: "demo-3",
+    title: "School Fun Day",
+    message: "Reminder: School Fun Day is next Thursday. Prepare activity schedules and timing.",
+    created_by: null,
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+  },
+];
+
 const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boolean }) => {
   const { user } = useAuth();
   const userId = user?.id;
@@ -221,8 +245,28 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
 
         {loading ? (
           <p>Loading notifications...</p>
+        ) : schemaError ? (
+          <p className="text-destructive text-sm">{schemaError}</p>
         ) : notifications.length === 0 ? (
-          <p className="text-muted-foreground">No notifications yet.</p>
+          <>
+            <p className="text-muted-foreground">No notifications yet. Showing demo notifications.</p>
+            <div className="space-y-2">
+              {DEMO_NOTIFICATIONS.map((notification) => (
+                <div key={notification.id} className="rounded-lg p-3 border border-primary/40 bg-primary/10">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">{notification.title}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {format(new Date(notification.created_at), "MMM d, yyyy 'at' h:mm a")}
+                      </p>
+                    </div>
+                    <Badge variant="secondary">Demo</Badge>
+                  </div>
+                  <p className="mt-2 text-sm">{notification.message}</p>
+                </div>
+              ))}
+            </div>
+          </>
         ) : (
           <div className="space-y-2">
             {notifications.map((notification) => {
@@ -235,7 +279,9 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold">{notification.title}</p>
-                      <p className="text-sm text-muted-foreground">{format(new Date(notification.created_at), "MMM d, yyyy 'at' h:mm a")}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {format(new Date(notification.created_at), "MMM d, yyyy 'at' h:mm a")}
+                      </p>
                     </div>
                     <Badge variant={isRead ? "secondary" : "default"}>{isRead ? "Read" : "Unread"}</Badge>
                   </div>

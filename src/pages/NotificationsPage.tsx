@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -8,13 +8,40 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import NotificationsPanel from "@/components/NotificationsPanel";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Send, Calendar, MessageSquare } from "lucide-react";
 import { Tables } from "@/integrations/supabase/types";
 
 type LeaveRequest = Tables<"leave_requests">;
+
+const DEMO_LEAVE_REQUESTS: LeaveRequest[] = [
+  {
+    id: "demo-lr-1",
+    user_id: "00000000-0000-0000-0000-000000000001",
+    staff_name: "Jane Doe",
+    start_date: "2026-04-05",
+    end_date: "2026-04-09",
+    reason: "Medical appointment",
+    status: "pending",
+    admin_note: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: "demo-lr-2",
+    user_id: "00000000-0000-0000-0000-000000000002",
+    staff_name: "John Smith",
+    start_date: "2026-03-20",
+    end_date: "2026-03-22",
+    reason: "Family function",
+    status: "approved",
+    admin_note: "Approved, enjoy your time off.",
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
+    updated_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString(),
+  },
+];
 
 const NotificationsPage = () => {
   const { user, role } = useAuth();
@@ -211,11 +238,12 @@ const NotificationsPage = () => {
 };
 
 const StaffRequestsAdmin = () => {
+  const navigate = useNavigate();
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  React.useEffect(() => {
+  useEffect(() => {
     const fetchRequests = async () => {
       const { data } = await supabase
         .from("leave_requests")
@@ -245,43 +273,38 @@ const StaffRequestsAdmin = () => {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex items-center justify-between">
         <CardTitle>Staff Leave Requests</CardTitle>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/admin/dashboard')}>
+          Back
+        </Button>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {requests.map((request) => (
+          {(requests.length === 0 ? DEMO_LEAVE_REQUESTS : requests).map((request) => (
             <div key={request.id} className="border rounded-lg p-4">
               <div className="flex justify-between items-start mb-2">
                 <div>
                   <p className="font-semibold">{request.staff_name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {request.start_date} to {request.end_date}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{request.start_date} to {request.end_date}</p>
                 </div>
-                <Badge variant={
-                  request.status === "approved" ? "default" :
-                  request.status === "rejected" ? "destructive" : "secondary"
-                }>
+                <Badge
+                  variant={
+                    request.status === 'approved' ? 'default' :
+                    request.status === 'rejected' ? 'destructive' : 'secondary'
+                  }
+                >
                   {request.status}
                 </Badge>
               </div>
-              {request.reason && (
-                <p className="text-sm mb-2">Reason: {request.reason}</p>
-              )}
-              {request.status === "pending" && (
+              <p className="text-sm mb-2">Reason: {request.reason || 'N/A'}</p>
+              {request.admin_note && <p className="text-sm text-muted-foreground">Admin note: {request.admin_note}</p>}
+              {request.status === 'pending' && requests.length > 0 && (
                 <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => updateRequestStatus(request.id, "approved")}
-                  >
+                  <Button size="sm" onClick={() => updateRequestStatus(request.id, 'approved')}>
                     Approve
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => updateRequestStatus(request.id, "rejected")}
-                  >
+                  <Button size="sm" variant="destructive" onClick={() => updateRequestStatus(request.id, 'rejected')}>
                     Reject
                   </Button>
                 </div>
@@ -295,11 +318,12 @@ const StaffRequestsAdmin = () => {
 };
 
 const StaffRequestsHistory = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!user) return;
     const fetchRequests = async () => {
       const { data } = await supabase
@@ -317,13 +341,32 @@ const StaffRequestsHistory = () => {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex items-center justify-between">
         <CardTitle>My Leave Requests</CardTitle>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/staff')}>
+          Back
+        </Button>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
           {requests.length === 0 ? (
-            <p className="text-muted-foreground">No leave requests submitted yet.</p>
+            <>
+              <p className="text-muted-foreground">No leave requests submitted yet. Demo data shown below.</p>
+              {DEMO_LEAVE_REQUESTS.map((demo) => (
+                <div key={demo.id} className="border rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="text-sm text-muted-foreground">{demo.start_date} to {demo.end_date}</p>
+                    </div>
+                    <Badge variant={demo.status === 'approved' ? 'default' : demo.status === 'rejected' ? 'destructive' : 'secondary'}>
+                      {demo.status}
+                    </Badge>
+                  </div>
+                  <p className="text-sm mb-2">Reason: {demo.reason}</p>
+                  {demo.admin_note && <p className="text-sm text-muted-foreground">Admin note: {demo.admin_note}</p>}
+                </div>
+              ))}
+            </>
           ) : (
             requests.map((request) => (
               <div key={request.id} className="border rounded-lg p-4">
