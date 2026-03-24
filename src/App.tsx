@@ -18,6 +18,8 @@ import StaffManagement from "@/pages/admin/StaffManagement";
 import SettingsPage from "@/pages/admin/SettingsPage";
 import Reports from "@/pages/admin/Reports";
 import LeaveManagement from "@/pages/admin/LeaveManagement";
+import AnalyticsPage from "@/pages/admin/Analytics";
+import CalendarPage from "@/pages/admin/Calendar";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -47,8 +49,11 @@ const App = () => (
                   <AdminLayout />
                 </ProtectedRoute>
               }>
-                <Route index element={<AdminDashboard />} />
+                <Route index element={<Navigate to="/admin/analytics" replace />} />
+                <Route path="analytics" element={<AnalyticsPage />} />
+                <Route path="dashboard" element={<AdminDashboard />} />
                 <Route path="staff" element={<StaffManagement />} />
+                <Route path="calendar" element={<CalendarPage />} />
                 <Route path="reports" element={<Reports />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="leave" element={<LeaveManagement />} />
