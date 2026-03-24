@@ -25,10 +25,11 @@ export type NotificationStatus = {
   updated_at: string;
 };
 
-const NotificationsPanel = ({ isAdmin }: { isAdmin?: boolean }) => {
+const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boolean }) => {
   const { user } = useAuth();
   const userId = user?.id;
   const { toast } = useToast();
+  const [schemaError, setSchemaError] = useState<string | null>(null);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [statuses, setStatuses] = useState<Record<string, boolean>>({});
@@ -46,6 +47,7 @@ const NotificationsPanel = ({ isAdmin }: { isAdmin?: boolean }) => {
   const fetchNotifications = async () => {
     if (!userId) return;
     setLoading(true);
+    setSchemaError(null);
 
     const [notifRes, statusRes] = await Promise.all([
       supabase
@@ -59,23 +61,25 @@ const NotificationsPanel = ({ isAdmin }: { isAdmin?: boolean }) => {
     ]);
 
     if (notifRes.error) {
-      toast({ title: "Error", description: notifRes.error.message, variant: "destructive" });
-      setLoading(false);
-      return;
+      const notFound = notifRes.error.message.toLowerCase().includes("relation \"public.notifications\" does not exist") || notifRes.error.code === "42P01";
+      setSchemaError(notFound ? "Notifications table does not exist. Run database migrations." : notifRes.error.message);
+      setNotifications([]);
+    } else {
+      setNotifications(notifRes.data ?? []);
     }
 
     if (statusRes.error) {
-      toast({ title: "Error", description: statusRes.error.message, variant: "destructive" });
-      setLoading(false);
-      return;
+      const notFound = statusRes.error.message.toLowerCase().includes("relation \"public.notification_statuses\" does not exist") || statusRes.error.code === "42P01";
+      setSchemaError(notFound ? "Notification statuses table does not exist. Run database migrations." : statusRes.error.message);
+      setStatuses({});
+    } else {
+      const statusMap: Record<string, boolean> = {};
+      (statusRes.data ?? []).forEach((status) => {
+        statusMap[status.notification_id] = status.read;
+      });
+      setStatuses(statusMap);
     }
 
-    setNotifications(notifRes.data ?? []);
-    const statusMap: Record<string, boolean> = {};
-    (statusRes.data ?? []).forEach((status) => {
-      statusMap[status.notification_id] = status.read;
-    });
-    setStatuses(statusMap);
     setLoading(false);
   };
 
@@ -144,7 +148,12 @@ const NotificationsPanel = ({ isAdmin }: { isAdmin?: boolean }) => {
     setSending(false);
 
     if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      const notFound = error.message.toLowerCase().includes("relation \"public.notifications\" does not exist") || error.code === "42P01";
+      if (notFound) {
+        setSchemaError("Notifications table does not exist. Run database migrations.");
+      } else {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      }
       return;
     }
 
@@ -180,7 +189,10 @@ const NotificationsPanel = ({ isAdmin }: { isAdmin?: boolean }) => {
         </div>
       </CardHeader>
       <CardContent>
-        {isAdmin ? (
+        {schemaError ? (
+          <p className="text-destructive text-sm">{schemaError}</p>
+        ) : null}
+        {enableBroadcast ? (
           <div className="space-y-2 border-b border-border pb-4 mb-4">
             <Input
               placeholder="Broadcast title"

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import NotificationsPanel from "@/components/NotificationsPanel";
@@ -235,7 +236,11 @@ const AdminDashboard = () => {
         ))}
       </div>
 
-      <NotificationsPanel isAdmin />
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-xl font-semibold">Quick Actions</h3>
+        <Link to="/notifications" className="text-sm text-primary hover:underline">Go to Notifications</Link>
+      </div>
+      <NotificationsPanel />
 
       {/* Attendance Table */}
       <Card>
