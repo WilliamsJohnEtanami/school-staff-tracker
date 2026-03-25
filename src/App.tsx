@@ -21,6 +21,7 @@ import Reports from "@/pages/admin/Reports";
 import LeaveManagement from "@/pages/admin/LeaveManagement";
 import AnalyticsPage from "@/pages/admin/Analytics";
 import CalendarPage from "@/pages/admin/Calendar";
+import StaffProfile from "@/pages/admin/StaffProfile";
 import NotificationsPage from "@/pages/NotificationsPage";
 import NotFound from "@/pages/NotFound";
 
