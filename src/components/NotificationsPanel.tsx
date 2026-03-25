@@ -61,32 +61,46 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
     setLoading(true);
     setSchemaError(null);
 
-    const [notifRes, statusRes] = await Promise.all([
-      supabase
-        .from("notifications")
-        .select("id,title,message,created_by,created_at")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("notification_statuses")
-        .select("notification_id,read")
-        .eq("user_id", userId),
-    ]);
+    // Fetch notifications
+    const notifRes = await supabase
+      .from("notifications")
+      .select("id,title,message,created_by,created_at")
+      .order("created_at", { ascending: false });
 
     if (notifRes.error) {
       const notFound = notifRes.error.message.toLowerCase().includes("relation \"public.notifications\" does not exist") || notifRes.error.code === "42P01";
       setSchemaError(notFound ? "Notifications table does not exist. Run database migrations." : notifRes.error.message);
-      setNotifications([]);
-    } else {
-      setNotifications(notifRes.data ?? []);
+      setNotifications(DEMO_NOTIFICATIONS.length > 0 ? DEMO_NOTIFICATIONS : []);
+      setStatuses({});
+      setLoading(false);
+      return;
     }
 
+    // Set notifications - if empty, show demo notifications
+    const notifs = notifRes.data ?? [];
+    if (notifs.length === 0 && DEMO_NOTIFICATIONS.length > 0) {
+      setNotifications(DEMO_NOTIFICATIONS);
+    } else {
+      setNotifications(notifs);
+    }
+
+    // Try to fetch notification statuses - this table might not exist yet
+    const statusRes = await supabase
+      .from("notification_statuses")
+      .select("notification_id,read")
+      .eq("user_id", userId);
+
     if (statusRes.error) {
+      // Don't show error for missing notification_statuses table - just treat as empty
       const notFound = statusRes.error.message.toLowerCase().includes("relation \"public.notification_statuses\" does not exist") || statusRes.error.code === "42P01";
-      setSchemaError(notFound ? "Notification statuses table does not exist. Run database migrations." : statusRes.error.message);
+      if (!notFound) {
+        console.warn("Notification statuses query error:", statusRes.error);
+      }
+      // Default to all notifications being unread if table doesn't exist
       setStatuses({});
     } else {
       const statusMap: Record<string, boolean> = {};
-      (statusRes.data ?? []).forEach((status) => {
+      (statusRes.data ?? []).forEach((status: any) => {
         statusMap[status.notification_id] = status.read;
       });
       setStatuses(statusMap);
@@ -97,6 +111,7 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
 
   const setAsRead = async (notificationId: string) => {
     if (!userId) return;
+    
     const { error } = await supabase.from("notification_statuses").upsert(
       {
         notification_id: notificationId,
@@ -107,7 +122,11 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
     );
 
     if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      const isTableMissing = error.message.toLowerCase().includes("relation \"public.notification_statuses\" does not exist") || error.code === "42P01";
+      if (!isTableMissing) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      }
+      // Silently fail if table doesn't exist - user can still see notifications
       return;
     }
 
@@ -128,15 +147,19 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
     });
 
     if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      const isTableMissing = error.message.toLowerCase().includes("relation \"public.notification_statuses\" does not exist") || error.code === "42P01";
+      if (!isTableMissing) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      }
+      // Silently fail if table doesn't exist
       return;
     }
 
-    const newStatuses = { ...statuses };
+    const newStatuses: Record<string, boolean> = {};
     upserts.forEach((u) => {
       newStatuses[u.notification_id] = true;
     });
-    setStatuses(newStatuses);
+    setStatuses((prev) => ({ ...prev, ...newStatuses }));
   };
 
   const broadcastNotification = async () => {
