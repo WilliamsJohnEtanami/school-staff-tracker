@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save, MapPin, Crosshair, RefreshCw, ChevronDown, CheckCircle2, ExternalLink, LogOut } from "lucide-react";
+import { Loader2, Save, MapPin, Crosshair, RefreshCw, ChevronDown, CheckCircle2, ExternalLink, LogOut, Bell, Clock } from "lucide-react";
 
 const SettingsPage = () => {
   const [settings, setSettings] = useState<any>(null);
@@ -26,6 +27,13 @@ const SettingsPage = () => {
   const [lateTime, setLateTime] = useState("");
   const [alertTime, setAlertTime] = useState("");
   const [alertEmail, setAlertEmail] = useState("");
+
+  // Reminder settings
+  const [clockInReminder, setClockInReminder] = useState(true);
+  const [clockOutReminder, setClockOutReminder] = useState(true);
+  const [dailyAlerts, setDailyAlerts] = useState(true);
+  const [weeklyReports, setWeeklyReports] = useState(true);
+  const [reminderTime, setReminderTime] = useState("09:00");
 
   const [detecting, setDetecting] = useState(false);
   const [detectedLat, setDetectedLat] = useState<number | null>(null);
@@ -46,6 +54,11 @@ const SettingsPage = () => {
         setLateTime(data.late_time.substring(0, 5));
         setAlertTime(data.alert_time ? data.alert_time.substring(0, 5) : "10:00");
         setAlertEmail(data.alert_email ?? "");
+        setClockInReminder(data.clock_in_reminder ?? true);
+        setClockOutReminder(data.clock_out_reminder ?? true);
+        setDailyAlerts(data.daily_alerts ?? true);
+        setWeeklyReports(data.weekly_reports ?? true);
+        setReminderTime(data.reminder_time ?? "09:00");
       }
       setLoading(false);
     };
@@ -141,6 +154,11 @@ const SettingsPage = () => {
       late_time: lateTime + ":00",
       alert_time: alertTime + ":00",
       alert_email: alertEmail,
+      clock_in_reminder: clockInReminder,
+      clock_out_reminder: clockOutReminder,
+      daily_alerts: dailyAlerts,
+      weekly_reports: weeklyReports,
+      reminder_time: reminderTime + ":00",
     }).eq("id", settings.id);
     setSaving(false);
     if (error) {
@@ -228,6 +246,70 @@ const SettingsPage = () => {
               </Button>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Reminder Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5 text-primary" /> Reminder Settings
+          </CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Configure automated reminders and notifications for staff and administrators.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSave} className="space-y-6 max-w-md">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Clock-in Reminders</Label>
+                  <p className="text-sm text-muted-foreground">Send notifications to staff who haven't clocked in by the reminder time</p>
+                </div>
+                <Switch checked={clockInReminder} onCheckedChange={setClockInReminder} />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Clock-out Reminders</Label>
+                  <p className="text-sm text-muted-foreground">Remind staff to clock out at the end of the day</p>
+                </div>
+                <Switch checked={clockOutReminder} onCheckedChange={setClockOutReminder} />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Daily Absence Alerts</Label>
+                  <p className="text-sm text-muted-foreground">Send daily email reports of absent staff</p>
+                </div>
+                <Switch checked={dailyAlerts} onCheckedChange={setDailyAlerts} />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Weekly Reports</Label>
+                  <p className="text-sm text-muted-foreground">Generate weekly attendance summary reports</p>
+                </div>
+                <Switch checked={weeklyReports} onCheckedChange={setWeeklyReports} />
+              </div>
+
+              <div>
+                <Label>Reminder Time</Label>
+                <Input
+                  type="time"
+                  value={reminderTime}
+                  onChange={(e) => setReminderTime(e.target.value)}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Time to send clock-in reminders and other automated notifications</p>
+              </div>
+            </div>
+
+            <Button type="submit" disabled={saving} className="gap-2">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Reminder Settings
+            </Button>
+          </form>
         </CardContent>
       </Card>
 

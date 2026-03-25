@@ -30,23 +30,9 @@ const DEMO_NOTIFICATIONS: Notification[] = [
   {
     id: "demo-1",
     title: "Welcome to Staff Tracker",
-    message: "This is a demo notification. You're all set to start using the app.",
+    message: "Welcome! Your account has been created successfully. Start tracking your attendance and notifications here.",
     created_by: null,
     created_at: new Date().toISOString(),
-  },
-  {
-    id: "demo-2",
-    title: "Weekly Check-in",
-    message: "Please remember to submit your weekly attendance report by Friday.",
-    created_by: null,
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-  },
-  {
-    id: "demo-3",
-    title: "School Fun Day",
-    message: "Reminder: School Fun Day is next Thursday. Prepare activity schedules and timing.",
-    created_by: null,
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
   },
 ];
 
@@ -210,11 +196,13 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
   return (
     <Card className="space-y-4">
       <CardHeader>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <CardTitle>Notifications</CardTitle>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary">{unreadCount} Unread</Badge>
-            <Button variant="ghost" size="sm" onClick={markAllAsRead} disabled={!unreadCount || loading}>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+            <Badge variant="secondary" className="min-w-[92px] text-center">
+              {unreadCount} Unread
+            </Badge>
+            <Button variant="outline" size="sm" onClick={markAllAsRead} disabled={!unreadCount || loading} className="w-full sm:w-auto">
               Mark all read
             </Button>
           </div>

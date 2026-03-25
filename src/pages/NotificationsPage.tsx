@@ -273,11 +273,8 @@ const StaffRequestsAdmin = () => {
 
   return (
     <Card>
-      <CardHeader className="flex items-center justify-between">
+      <CardHeader>
         <CardTitle>Staff Leave Requests</CardTitle>
-        <Button variant="ghost" size="sm" onClick={() => navigate('/admin/dashboard')}>
-          Back
-        </Button>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -312,6 +309,11 @@ const StaffRequestsAdmin = () => {
             </div>
           ))}
         </div>
+        <div className="mt-4 text-center">
+          <Button variant="outline" onClick={() => navigate('/admin/dashboard')}>
+            Back to Dashboard
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -341,11 +343,8 @@ const StaffRequestsHistory = () => {
 
   return (
     <Card>
-      <CardHeader className="flex items-center justify-between">
+      <CardHeader>
         <CardTitle>My Leave Requests</CardTitle>
-        <Button variant="ghost" size="sm" onClick={() => navigate('/staff')}>
-          Back
-        </Button>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -392,6 +391,11 @@ const StaffRequestsHistory = () => {
               </div>
             ))
           )}
+        </div>
+        <div className="mt-6 text-center">
+          <Button variant="outline" onClick={() => navigate('/staff')}>
+            Back to Dashboard
+          </Button>
         </div>
       </CardContent>
     </Card>

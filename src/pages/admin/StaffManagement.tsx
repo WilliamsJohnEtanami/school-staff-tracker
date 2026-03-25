@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -99,7 +100,11 @@ const StaffManagement = () => {
                 <TableBody>
                   {staff.map((s) => (
                     <TableRow key={s.id}>
-                      <TableCell className="font-medium">{s.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <Link to={`/admin/staff/${s.id}`} className="text-primary hover:underline">
+                          {s.name}
+                        </Link>
+                      </TableCell>
                       <TableCell>{s.email}</TableCell>
                       <TableCell>
                         <Badge variant={s.status === "active" ? "default" : "secondary"} className={s.status === "active" ? "bg-accent text-accent-foreground" : ""}>
