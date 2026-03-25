@@ -109,8 +109,25 @@ const AdminDashboard = () => {
     }
 
     fetchData();
-    const channel = supabase.channel("attendance-realtime-dash").on("postgres_changes", { event: "INSERT", schema: "public", table: "attendance" }, () => fetchData()).subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    // Set up real-time listener for new attendance records
+    const channel = supabase
+      .channel("attendance-realtime-dash")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "attendance" },
+        (payload) => {
+          console.log("Attendance change detected:", payload);
+          fetchData(); // Refetch all data when attendance changes
+        }
+      )
+      .subscribe((status) => {
+        console.log("Realtime subscription status:", status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchData, searchParams]);
 
   const calcDistance = useCallback((lat: number, lng: number) => {
@@ -160,14 +177,36 @@ const AdminDashboard = () => {
 
   useEffect(() => setPage(0), [statusFilter, deviceFilter, complianceFilter, searchQuery, sortKey, sortDir, dateFrom, dateTo]);
 
-  const todayRecords = attendance.filter(a => format(new Date(a.created_at), "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd"));
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const todayRecords = attendance.filter(a => {
+    const recordTime = new Date(a.timestamp || a.created_at);
+    return recordTime >= todayStart && recordTime <= todayEnd;
+  });
+
   const presentCount = todayRecords.filter(a => a.status === "present").length;
   const lateCount = todayRecords.filter(a => a.status === "late").length;
-  const absentCount = Math.max(0, staffCount - todayRecords.length - approvedLeaveToday);
+  const breakCount = todayRecords.filter(a => a.status === "break").length;
+  
+  // Get unique staff who have clocked in today
+  const clockedInStaff = new Set(todayRecords.map(a => a.user_id));
+  const onLeaveToday = approvedLeaveToday;
+  const absentCount = Math.max(0, staffCount - clockedInStaff.size - onLeaveToday);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("desc"); }
+  };
+
+  const handleStatsClick = (statusValue: string) => {
+    setStatusFilter(statusValue as any);
+    // Scroll to table
+    setTimeout(() => {
+      document.querySelector('[data-table-section]')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   const handleOverrideStaffChange = (userId: string) => {
@@ -248,10 +287,10 @@ const AdminDashboard = () => {
   };
 
   const cards = [
-    { label: "Total Staff", value: staffCount, icon: Users, color: "text-primary" },
-    { label: "Present Today", value: presentCount, icon: UserCheck, color: "text-accent" },
-    { label: "Absent Today", value: absentCount, icon: UserX, color: "text-destructive" },
-    { label: "Late Today", value: lateCount, icon: Clock, color: "text-warning" },
+    { label: "Total Staff", value: staffCount, icon: Users, color: "text-primary", clickable: false },
+    { label: "Clocked In Today", value: presentCount, icon: UserCheck, color: "text-accent", clickable: true, filter: "present" },
+    { label: "Absent Today", value: absentCount, icon: UserX, color: "text-destructive", clickable: true, filter: "absent" },
+    { label: "Late Today", value: lateCount, icon: Clock, color: "text-warning", clickable: true, filter: "late" },
   ];
 
   const SortableHead = ({ label, field }: { label: string; field: SortKey }) => (
@@ -291,14 +330,21 @@ const AdminDashboard = () => {
       {/* Overview Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {cards.map(c => (
-          <Card key={c.label}>
-            <CardContent className="pt-6 flex items-center gap-4">
+          <Card key={c.label} className={c.clickable ? "cursor-pointer transition-all hover:shadow-lg hover:border-primary" : ""}>
+            <CardContent 
+              className="pt-6 flex items-center gap-4"
+              onClick={() => c.clickable && handleStatsClick((c as any).filter)}
+              role={c.clickable ? "button" : undefined}
+              tabIndex={c.clickable ? 0 : undefined}
+              onKeyDown={(e) => c.clickable && e.key === 'Enter' && handleStatsClick((c as any).filter)}
+            >
               <div className={`p-3 rounded-full bg-muted ${c.color}`}>
                 <c.icon className="h-6 w-6" />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-2xl font-bold text-foreground">{c.value}</p>
                 <p className="text-xs text-muted-foreground">{c.label}</p>
+                {c.clickable && <p className="text-xs text-primary font-medium mt-1">Click to filter</p>}
               </div>
             </CardContent>
           </Card>
@@ -436,7 +482,7 @@ const AdminDashboard = () => {
       </Card>
 
       {/* Attendance Table */}
-      <Card>
+      <Card data-table-section="true">
         <CardHeader>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <CardTitle className="text-lg">Attendance Records</CardTitle>

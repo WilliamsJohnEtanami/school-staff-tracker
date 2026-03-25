@@ -1,2 +1,2 @@
--- CREATE UNIQUE INDEX attendance_user_date_unique
---   ON public.attendance (user_id, (timestamp::date));
+-- This migration was redundant - the unique index is already created in 20260221000000_unique_attendance_per_day.sql
+-- Keeping this file for migration history but no SQL to execute
