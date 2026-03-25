@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import NotificationsPanel from "@/components/NotificationsPanel";
@@ -11,10 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Users, UserCheck, UserX, Clock, ExternalLink, Loader2, Download, ChevronDown, ChevronUp, Search, ArrowUpDown, Plus } from "lucide-react";
+import { Users, UserCheck, UserX, Clock, ExternalLink, Loader2, Download, ChevronDown, ChevronUp, Search, ArrowUpDown, Plus, Bell, BellRing, FileText, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { getDistanceInMeters } from "@/lib/geo";
 import { useToast } from "@/hooks/use-toast";
+import { useReminders } from "@/hooks/use-reminders";
 import * as XLSX from "xlsx";
 
 const PAGE_SIZE = 25;
@@ -31,15 +32,20 @@ const AdminDashboard = () => {
   const [approvedLeaveToday, setApprovedLeaveToday] = useState(0);
   const [dateFrom, setDateFrom] = useState(format(new Date(), "yyyy-MM-dd"));
   const [dateTo, setDateTo] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [searchParams] = useSearchParams();
+  const [statusFilter, setStatusFilter] = useState<"all" | "present" | "late" | "break" | "absent" | "on_leave" | "anomalies">("all");
   const [deviceFilter, setDeviceFilter] = useState("all");
   const [complianceFilter, setComplianceFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [workSessions, setWorkSessions] = useState<any[]>([]);
+  const [activityEvents, setActivityEvents] = useState<any[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [sortKey, setSortKey] = useState<SortKey>("timestamp");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const { toast } = useToast();
+  const { loading: reminderLoading, triggerClockInReminders, triggerClockOutReminders, triggerWeeklyReports, triggerPendingLeaveReminders } = useReminders();
 
   // Override dialog state
   const [overrideOpen, setOverrideOpen] = useState(false);
@@ -53,25 +59,59 @@ const AdminDashboard = () => {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [attRes, staffRes, settRes, leaveRes] = await Promise.all([
+    const [attRes, staffRes, settRes, leaveRes, workSessionRes, allLeaveRes] = await Promise.all([
       supabase.from("attendance").select("*").gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59").order("timestamp", { ascending: false }).limit(5000),
       supabase.from("profiles").select("id, name, user_id, status").order("name"),
       supabase.from("settings").select("*").limit(1).maybeSingle(),
       supabase.from("leave_requests").select("*").eq("status", "approved").lte("start_date", format(new Date(), "yyyy-MM-dd")).gte("end_date", format(new Date(), "yyyy-MM-dd")),
+      supabase.from("work_sessions").select("*").gte("session_date", dateFrom).lte("session_date", dateTo).order("started_at", { ascending: false }).limit(1000),
+      supabase.from("leave_requests").select("*").order("created_at", { ascending: false }).limit(100),
     ]);
     setAttendance(attRes.data ?? []);
     setStaffList(staffRes.data ?? []);
     setStaffCount((staffRes.data ?? []).filter((s: any) => s.status === "active").length);
     setSettings(settRes.data);
     setApprovedLeaveToday((leaveRes.data ?? []).length);
+    setWorkSessions(workSessionRes.data ?? []);
+    setLeaveRequests(allLeaveRes.data ?? []);
+
+    const events: any[] = [];
+    (attRes.data ?? []).forEach((a: any) => {
+      events.push({
+        id: `attendance-${a.id}`,
+        time: a.created_at || a.timestamp,
+        text: `${a.staff_name} ${a.status === 'present' ? 'clocked in' : a.status === 'late' ? 'clocked in late' : a.status === 'break' ? 'started break' : a.status}`,
+        type: 'attendance',
+      });
+    });
+    (allLeaveRes.data ?? []).forEach((l: any) => {
+      events.push({
+        id: `leave-${l.id}`,
+        time: l.created_at,
+        text: `${l.staff_name} requested leave (${l.status}) from ${l.start_date} to ${l.end_date}`,
+        type: 'leave',
+      });
+    });
+    setActivityEvents(events.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()));
+
     setLoading(false);
   }, [dateFrom, dateTo]);
 
   useEffect(() => {
+    const statusParam = searchParams.get('status');
+    if (statusParam === 'present' || statusParam === 'late' || statusParam === 'break' || statusParam === 'absent') {
+      setStatusFilter(statusParam);
+    } else if (statusParam === 'on_leave') {
+      setStatusFilter('all');
+      setComplianceFilter('all');
+    } else if (statusParam === 'anomalies') {
+      setComplianceFilter('outside');
+    }
+
     fetchData();
     const channel = supabase.channel("attendance-realtime-dash").on("postgres_changes", { event: "INSERT", schema: "public", table: "attendance" }, () => fetchData()).subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [fetchData]);
+  }, [fetchData, searchParams]);
 
   const calcDistance = useCallback((lat: number, lng: number) => {
     if (!settings) return null;
@@ -80,7 +120,16 @@ const AdminDashboard = () => {
 
   const filtered = useMemo(() => {
     let data = attendance.filter(a => {
-      if (statusFilter !== "all" && a.status !== statusFilter) return false;
+      if (statusFilter !== "all" && statusFilter !== "anomalies" && statusFilter !== "on_leave") {
+        if (a.status !== statusFilter) return false;
+      }
+      if (statusFilter === "anomalies" && settings) {
+        const d = calcDistance(a.latitude, a.longitude);
+        if (d === null || d <= settings.allowed_radius) return false;
+      }
+      if (statusFilter === "on_leave") {
+        return false;
+      }
       if (deviceFilter !== "all" && (a.device_type ?? "Desktop") !== deviceFilter) return false;
       if (complianceFilter !== "all" && settings) {
         const d = calcDistance(a.latitude, a.longitude);
@@ -219,6 +268,26 @@ const AdminDashboard = () => {
     <div className="p-4 md:p-6 space-y-6">
       <h2 className="text-2xl font-bold text-foreground">Dashboard</h2>
 
+      <div className="flex flex-wrap items-center gap-2">
+        {[
+          { value: 'all', label: 'All' },
+          { value: 'present', label: 'Clocked In' },
+          { value: 'late', label: 'Late' },
+          { value: 'break', label: 'Break' },
+          { value: 'absent', label: 'Absent' },
+          { value: 'on_leave', label: 'On Leave' },
+          { value: 'anomalies', label: 'Anomalies' },
+        ].map((option) => (
+          <button
+            key={option.value}
+            onClick={() => setStatusFilter(option.value as any)}
+            className={`rounded-full px-3 py-1 text-xs border transition ${statusFilter === option.value ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent border-border text-foreground hover:bg-primary/10'}`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
       {/* Overview Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {cards.map(c => (
@@ -241,6 +310,130 @@ const AdminDashboard = () => {
         <Link to="/notifications" className="text-sm text-primary hover:underline">Go to Notifications</Link>
       </div>
       <NotificationsPanel />
+
+      {/* Reminder Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Manual Reminders</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <Button
+              variant="outline"
+              onClick={triggerClockInReminders}
+              disabled={reminderLoading}
+              className="flex items-center gap-2 h-auto p-4"
+            >
+              <Bell className="h-5 w-5" />
+              <div className="text-left">
+                <div className="font-medium">Clock In</div>
+                <div className="text-xs text-muted-foreground">Send reminders to staff who haven't clocked in</div>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={triggerClockOutReminders}
+              disabled={reminderLoading}
+              className="flex items-center gap-2 h-auto p-4"
+            >
+              <BellRing className="h-5 w-5" />
+              <div className="text-left">
+                <div className="font-medium">Clock Out</div>
+                <div className="text-xs text-muted-foreground">Send reminders to staff who haven't clocked out</div>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={triggerWeeklyReports}
+              disabled={reminderLoading}
+              className="flex items-center gap-2 h-auto p-4"
+            >
+              <FileText className="h-5 w-5" />
+              <div className="text-left">
+                <div className="font-medium">Weekly Report</div>
+                <div className="text-xs text-muted-foreground">Send weekly attendance summary to admin</div>
+              </div>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={triggerPendingLeaveReminders}
+              disabled={reminderLoading}
+              className="flex items-center gap-2 h-auto p-4"
+            >
+              <Calendar className="h-5 w-5" />
+              <div className="text-left">
+                <div className="font-medium">Pending Leave</div>
+                <div className="text-xs text-muted-foreground">Remind admin about pending leave requests</div>
+              </div>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Work Session Details */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Work Sessions & Breaks</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {workSessions.length === 0 ? (
+            <p className="text-muted-foreground">No work sessions recorded for the selected period.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Staff</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Start</TableHead>
+                    <TableHead>End</TableHead>
+                    <TableHead>Duration</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {workSessions.map((ws) => {
+                    const start = ws.started_at ? new Date(ws.started_at) : null;
+                    const end = ws.ended_at ? new Date(ws.ended_at) : null;
+                    const duration = start && end ? `${((end.getTime() - start.getTime()) / 3600000).toFixed(2)}h` : "Ongoing";
+                    return (
+                      <TableRow key={ws.id}>
+                        <TableCell>{ws.user_id || ws.staff_name}</TableCell>
+                        <TableCell>{ws.session_date}</TableCell>
+                        <TableCell>{ws.type}</TableCell>
+                        <TableCell>{start ? start.toLocaleTimeString() : "-"}</TableCell>
+                        <TableCell>{end ? end.toLocaleTimeString() : "-"}</TableCell>
+                        <TableCell>{duration}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Activity Feed */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Activity Feed</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {activityEvents.length === 0 ? (
+            <p className="text-muted-foreground">No recent activity.</p>
+          ) : (
+            <div className="space-y-3">
+              {activityEvents.slice(0, 50).map((evt) => (
+                <div key={evt.id} className="p-3 border rounded-lg">
+                  <p className="text-sm font-medium">{evt.text}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(evt.time).toLocaleString()}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Attendance Table */}
       <Card>

@@ -97,31 +97,49 @@ export type Database = {
       }
       settings: {
         Row: {
+          alert_email: string | null
           allowed_radius: number
+          clock_in_reminder: boolean
+          clock_out_reminder: boolean
           created_at: string
+          daily_alerts: boolean
           id: string
           late_time: string
+          reminder_time: string
           school_latitude: number
           school_longitude: number
           updated_at: string
+          weekly_reports: boolean
         }
         Insert: {
+          alert_email?: string | null
           allowed_radius?: number
+          clock_in_reminder?: boolean
+          clock_out_reminder?: boolean
           created_at?: string
+          daily_alerts?: boolean
           id?: string
           late_time?: string
+          reminder_time?: string
           school_latitude?: number
           school_longitude?: number
           updated_at?: string
+          weekly_reports?: boolean
         }
         Update: {
+          alert_email?: string | null
           allowed_radius?: number
+          clock_in_reminder?: boolean
+          clock_out_reminder?: boolean
           created_at?: string
+          daily_alerts?: boolean
           id?: string
           late_time?: string
+          reminder_time?: string
           school_latitude?: number
           school_longitude?: number
           updated_at?: string
+          weekly_reports?: boolean
         }
         Relationships: []
       }

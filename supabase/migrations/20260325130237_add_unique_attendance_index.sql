@@ -1,0 +1,2 @@
+-- CREATE UNIQUE INDEX attendance_user_date_unique
+--   ON public.attendance (user_id, (timestamp::date));

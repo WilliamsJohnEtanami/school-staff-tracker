@@ -13,7 +13,6 @@ ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Admins can insert notifications" ON public.notifications
   FOR INSERT TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'))
   WITH CHECK (public.has_role(auth.uid(), 'admin'));
 
 CREATE POLICY "Authenticated can select notifications" ON public.notifications
