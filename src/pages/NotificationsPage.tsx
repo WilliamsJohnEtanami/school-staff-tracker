@@ -992,61 +992,157 @@ const StaffLeaveRequestForm = ({ onSubmitted }: { onSubmitted: () => void }) => 
   };
 
   return (
-    <Card className="border-0 shadow-sm">
-      <CardHeader>
-        <CardTitle>Submit Leave Request</CardTitle>
-        <CardDescription>Choose the dates you need and include any context that will help admin review it quickly.</CardDescription>
-      </CardHeader>
+    <div className="p-4 md:p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold">{isAdmin ? "Admin" : "Staff"} Notifications</h1>
+          <p className="text-sm text-muted-foreground">
+            {isAdmin ? "Manage broadcasts and staff requests" : "View notifications and submit requests"}
+          </p>
+        </div>
+        {/* <Link to={isAdmin ? "/admin/dashboard" : "/staff"} className="text-sm text-primary hover:underline">
+          Go Back
+        </Link> */}
+      </div>
 
-      <CardContent>
-        <form onSubmit={handleLeaveRequest} className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="start-date">Start Date</Label>
-              <Input
-                id="start-date"
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
-                required
-              />
-            </div>
+      <Tabs defaultValue={isAdmin ? "broadcast" : "notifications"} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3">
+          {isAdmin ? (
+            <>
+              <TabsTrigger value="broadcast" className="flex items-center gap-2">
+                <Send className="h-4 w-4" />
+                Broadcast
+              </TabsTrigger>
+              <TabsTrigger value="notifications" className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                General Notifications
+              </TabsTrigger>
+              <TabsTrigger value="requests" className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Staff Requests
+              </TabsTrigger>
+            </>
+          ) : (
+            <>
+              <TabsTrigger value="notifications" className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                General Notifications
+              </TabsTrigger>
+              <TabsTrigger value="requests" className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Make Requests
+              </TabsTrigger>
+              <TabsTrigger value="history" className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                My Requests
+              </TabsTrigger>
+            </>
+          )}
+        </TabsList>
 
-            <div className="space-y-2">
-              <Label htmlFor="end-date">End Date</Label>
-              <Input
-                id="end-date"
-                type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
-                required
-              />
-            </div>
-          </div>
+        {isAdmin ? (
+          <>
+            <TabsContent value="broadcast">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Send Broadcast Message</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <NotificationsPanel enableBroadcast />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <div className="space-y-2">
-            <Label htmlFor="leave-reason">Reason</Label>
-            <Textarea
-              id="leave-reason"
-              rows={4}
-              placeholder="Add a short reason or any handover note for admin."
-              value={leaveReason}
-              onChange={(event) => setLeaveReason(event.target.value)}
-            />
-          </div>
+            <TabsContent value="notifications">
+              <Card>
+                <CardHeader>
+                  <CardTitle>General Notifications</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <NotificationsPanel />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <Button type="submit" className="w-full sm:w-auto" disabled={submitting}>
-            {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />}
-            Submit Leave Request
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+            <TabsContent value="requests">
+              <StaffRequestsAdmin />
+            </TabsContent>
+          </>
+        ) : (
+          <>
+            <TabsContent value="notifications">
+              <Card>
+                <CardHeader>
+                  <CardTitle>General Notifications</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <NotificationsPanel />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="requests">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Submit Leave Request</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleLeaveRequest} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="start-date">Start Date</Label>
+                        <Input
+                          id="start-date"
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="end-date">End Date</Label>
+                        <Input
+                          id="end-date"
+                          type="date"
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="reason">Reason (Optional)</Label>
+                      <Textarea
+                        id="reason"
+                        placeholder="Please provide a reason for your leave request..."
+                        value={leaveReason}
+                        onChange={(e) => setLeaveReason(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <Button type="submit" disabled={submitting} className="w-full">
+                      {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      Submit Leave Request
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="history">
+              <StaffRequestsHistory />
+            </TabsContent>
+          </>
+        )}
+      </Tabs>
+    </div>
   );
 };
 
-const StaffRequestsHistory = ({ onMakeRequest }: { onMakeRequest: () => void }) => {
-  const { user } = useAuth();
+const StaffRequestsAdmin = () => {
+  const navigate = useNavigate();
+  const [requests, setRequests] = useState<LeaveRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
