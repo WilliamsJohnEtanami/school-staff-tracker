@@ -69,8 +69,30 @@ const AdminSetup = () => {
         },
       });
 
+      // Check for errors in the response
       if (response.error) {
-        throw new Error(response.error.message || "Failed to create admin account");
+        let errorMessage = "An error occurred while creating the admin account";
+        
+        // Try to extract error message from different response formats
+        if (typeof response.error === 'object') {
+          if (response.error.message) {
+            errorMessage = response.error.message;
+          } else if (response.error.context?.data) {
+            const data = response.error.context.data;
+            if (typeof data === 'string') {
+              try {
+                const parsed = JSON.parse(data);
+                errorMessage = parsed.error || errorMessage;
+              } catch {
+                errorMessage = data;
+              }
+            } else if (data.error) {
+              errorMessage = data.error;
+            }
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
       setSuccess(true);
@@ -82,6 +104,7 @@ const AdminSetup = () => {
       }, 2000);
     } catch (err) {
       const message = err instanceof Error ? err.message : "An error occurred";
+      console.error("Admin setup error:", err);
       setError(message);
     } finally {
       setLoading(false);

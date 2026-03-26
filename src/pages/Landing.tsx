@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   MapPin, Clock, Shield, Smartphone, BarChart3,
@@ -38,11 +39,40 @@ const steps = [
 const Landing = () => {
   const navigate = useNavigate();
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+  const [adminExists, setAdminExists] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (dark) document.documentElement.classList.add("dark");
     else document.documentElement.classList.remove("dark");
   }, [dark]);
+
+  // Check if an admin account already exists so we can hide the setup CTA
+  useEffect(() => {
+    let mounted = true;
+    const checkAdmin = async () => {
+      try {
+        const res = await supabase.functions.invoke("setup-admin", { method: "GET" });
+        if (res && (res as any).data) {
+          // supabase-js returns { data } shape; data will be a JSON string if using older client
+          const payload = (res as any).data?.exists !== undefined ? (res as any).data : await res.json();
+          if (mounted) setAdminExists(Boolean(payload.exists));
+        } else if (mounted) {
+          // Fallback: try parsing raw response
+          try {
+            const raw = await res.json();
+            if (mounted) setAdminExists(Boolean(raw.exists));
+          } catch {
+            if (mounted) setAdminExists(null);
+          }
+        }
+      } catch (err) {
+        console.error("Error checking admin existence:", err);
+        if (mounted) setAdminExists(null);
+      }
+    };
+    checkAdmin();
+    return () => { mounted = false; };
+  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
@@ -101,9 +131,16 @@ const Landing = () => {
                 <Button size="lg" className="text-base px-8 gap-2" onClick={() => navigate("/login")}>
                   Get Started <ArrowRight className="w-4 h-4" />
                 </Button>
-                <Button size="lg" variant="outline" className="text-base px-8" onClick={() => navigate("/admin/setup")}>
-                  Admin Setup
-                </Button>
+                {adminExists === false && (
+                  <Button size="lg" variant="outline" className="text-base px-8" onClick={() => navigate("/admin/setup")}>
+                    Admin Setup
+                  </Button>
+                )}
+                {adminExists === null && (
+                  <Button size="lg" variant="outline" className="text-base px-8 opacity-60 cursor-wait" disabled>
+                    Checking...
+                  </Button>
+                )}
                 <Button size="lg" variant="outline" className="text-base px-8" onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}>
                   How It Works
                 </Button>
