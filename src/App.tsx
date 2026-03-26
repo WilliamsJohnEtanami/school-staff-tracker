@@ -22,6 +22,7 @@ import LeaveManagement from "@/pages/admin/LeaveManagement";
 import AnalyticsPage from "@/pages/admin/Analytics";
 import CalendarPage from "@/pages/admin/Calendar";
 import StaffProfile from "@/pages/admin/StaffProfile";
+import AdminSetup from "@/pages/AdminSetup";
 import NotificationsPage from "@/pages/NotificationsPage";
 import NotFound from "@/pages/NotFound";
 
@@ -38,6 +39,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/admin/setup" element={<AdminSetup />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/staff" element={
