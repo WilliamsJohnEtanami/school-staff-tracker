@@ -19,7 +19,6 @@ import StaffManagement from "@/pages/admin/StaffManagement";
 import SettingsPage from "@/pages/admin/SettingsPage";
 import Reports from "@/pages/admin/Reports";
 import LeaveManagement from "@/pages/admin/LeaveManagement";
-import AnalyticsPage from "@/pages/admin/Analytics";
 import CalendarPage from "@/pages/admin/Calendar";
 import StaffProfile from "@/pages/admin/StaffProfile";
 import AdminSetup from "@/pages/AdminSetup";
@@ -56,8 +55,7 @@ const App = () => (
                   </CalendarProvider>
                 </ProtectedRoute>
               }>
-                <Route index element={<Navigate to="/admin/analytics" replace />} />
-                <Route path="analytics" element={<AnalyticsPage />} />
+                <Route index element={<Navigate to="/admin/dashboard" replace />} />
                 <Route path="dashboard" element={<AdminDashboard />} />
                 <Route path="staff" element={<StaffManagement />} />
                 <Route path="staff/:staffId" element={<StaffProfile />} />
