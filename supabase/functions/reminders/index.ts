@@ -119,23 +119,33 @@ Deno.serve(async (req) => {
           .eq("type", "work");
 
         if (activeSessions && activeSessions.length > 0) {
+          const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
           const notifications = activeSessions.map((session: any) => ({
             title: "Clock-out Reminder",
             message: `Please remember to clock out before leaving. Your work session is still active.`,
             created_by: null,
           }));
 
-          const { error: notifError } = await supabase
+          const { error: notifError } = await supabaseAdmin
             .from("notifications")
             .insert(notifications);
 
           if (notifError) {
             console.error("Failed to create notifications:", notifError);
+            return new Response(JSON.stringify({
+              success: false,
+              error: "Failed to send clock-out reminders"
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
           }
 
           return new Response(JSON.stringify({
+            success: true,
             message: `Clock-out reminders sent to ${activeSessions.length} staff members.`
           }), {
+            status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
@@ -167,8 +177,9 @@ Deno.serve(async (req) => {
         const totalCheckIns = weeklyAttendance?.length || 0;
         const uniqueStaff = new Set(weeklyAttendance?.map((a: any) => a.user_id)).size;
 
-        // Create admin notification
-        const { error: notifError } = await supabase
+        // Create admin notification using service role
+        const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+        const { error: notifError } = await supabaseAdmin
           .from("notifications")
           .insert({
             title: "Weekly Attendance Report",
@@ -178,11 +189,20 @@ Deno.serve(async (req) => {
 
         if (notifError) {
           console.error("Failed to create weekly report notification:", notifError);
+          return new Response(JSON.stringify({
+            success: false,
+            error: "Failed to send weekly report"
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
 
         return new Response(JSON.stringify({
+          success: true,
           message: "Weekly attendance report generated."
         }), {
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -196,7 +216,8 @@ Deno.serve(async (req) => {
         .eq("status", "pending");
 
       if (pendingRequests && pendingRequests.length > 0) {
-        const { error: notifError } = await supabase
+        const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+        const { error: notifError } = await supabaseAdmin
           .from("notifications")
           .insert({
             title: "Pending Leave Requests",
@@ -206,11 +227,20 @@ Deno.serve(async (req) => {
 
         if (notifError) {
           console.error("Failed to create pending leave notification:", notifError);
+          return new Response(JSON.stringify({
+            success: false,
+            error: "Failed to send pending leave reminder"
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
 
         return new Response(JSON.stringify({
+          success: true,
           message: `Reminder sent for ${pendingRequests.length} pending leave requests.`
         }), {
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
