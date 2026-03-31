@@ -355,7 +355,7 @@ const AdminDashboard = () => {
         <h3 className="text-xl font-semibold">Quick Actions</h3>
         <Link to="/notifications" className="text-sm text-primary hover:underline">Go to Notifications</Link>
       </div>
-      <NotificationsPanel />
+      <NotificationsPanel enableBroadcast={true} />
 
       {/* Reminder Actions */}
       <Card>
