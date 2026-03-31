@@ -79,44 +79,43 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
         setLoading(false);
         return;
       }
+
+      // Set notifications - if empty, show demo notifications
+      const notifs = notifRes.data ?? [];
+      if (notifs.length === 0 && DEMO_NOTIFICATIONS.length > 0) {
+        setNotifications(DEMO_NOTIFICATIONS);
+      } else {
+        setNotifications(notifs);
+      }
+
+      // Try to fetch notification statuses - this table might not exist yet
+      const statusRes = await supabase
+        .from("notification_statuses")
+        .select("notification_id,read")
+        .eq("user_id", userId);
+
+      if (statusRes.error) {
+        // Don't show error for missing notification_statuses table - just treat as empty
+        const notFound = statusRes.error.message.toLowerCase().includes("relation \"public.notification_statuses\" does not exist") || statusRes.error.code === "42P01";
+        if (!notFound) {
+          console.warn("Notification statuses query error:", statusRes.error);
+        }
+        // Default to all notifications being unread if table doesn't exist
+        setStatuses({});
+      } else {
+        const statusMap: Record<string, boolean> = {};
+        (statusRes.data ?? []).forEach((status: any) => {
+          statusMap[status.notification_id] = status.read;
+        });
+        setStatuses(statusMap);
+      }
     } catch (err: any) {
       setSchemaError(`Failed to fetch notifications: ${err.message}`);
-      setLoading(false);
-      return;
-    }
-
-    // Set notifications - if empty, show demo notifications
-    const notifs = notifRes.data ?? [];
-    if (notifs.length === 0 && DEMO_NOTIFICATIONS.length > 0) {
       setNotifications(DEMO_NOTIFICATIONS);
-    } else {
-      setNotifications(notifs);
-    }
-
-    // Try to fetch notification statuses - this table might not exist yet
-    const statusRes = await supabase
-      .from("notification_statuses")
-      .select("notification_id,read")
-      .eq("user_id", userId);
-
-    if (statusRes.error) {
-      // Don't show error for missing notification_statuses table - just treat as empty
-      const notFound = statusRes.error.message.toLowerCase().includes("relation \"public.notification_statuses\" does not exist") || statusRes.error.code === "42P01";
-      if (!notFound) {
-        console.warn("Notification statuses query error:", statusRes.error);
-      }
-      // Default to all notifications being unread if table doesn't exist
-      setStatuses({});
-    } else {
-      const statusMap: Record<string, boolean> = {};
-      (statusRes.data ?? []).forEach((status: any) => {
-        statusMap[status.notification_id] = status.read;
-      });
-      setStatuses(statusMap);
     }
 
     setLoading(false);
-  }, [userId, toast]);
+  }, [userId]);
 
   const setAsRead = async (notificationId: string) => {
     if (!userId) return;
@@ -127,7 +126,7 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
         user_id: userId,
         read: true,
       },
-      { onConflict: "notification_id,user_id", returning: "minimal" }
+      { onConflict: "notification_id,user_id" }
     );
 
     if (error) {
@@ -152,7 +151,6 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
 
     const { error } = await supabase.from("notification_statuses").upsert(upserts, {
       onConflict: "notification_id,user_id",
-      returning: "minimal",
     });
 
     if (error) {
