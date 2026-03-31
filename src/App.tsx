@@ -15,6 +15,7 @@ import ResetPassword from "@/pages/ResetPassword";
 import StaffDashboard from "@/pages/staff/StaffDashboard";
 import AdminLayout from "@/components/AdminLayout";
 import AdminDashboard from "@/pages/admin/Dashboard";
+import Analytics from "@/pages/admin/Analytics";
 import StaffManagement from "@/pages/admin/StaffManagement";
 import SettingsPage from "@/pages/admin/SettingsPage";
 import Reports from "@/pages/admin/Reports";
@@ -62,7 +63,8 @@ const App = () => (
                   </CalendarProvider>
                 </ProtectedRoute>
               }>
-                <Route index element={<Navigate to="/admin/dashboard" replace />} />
+                <Route index element={<Navigate to="/admin/analytics" replace />} />
+                <Route path="analytics" element={<Analytics />} />
                 <Route path="dashboard" element={<AdminDashboard />} />
                 <Route path="staff" element={<StaffManagement />} />
                 <Route path="staff/:staffId" element={<StaffProfile />} />
