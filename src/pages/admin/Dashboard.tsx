@@ -59,43 +59,54 @@ const AdminDashboard = () => {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [attRes, staffRes, settRes, leaveRes, workSessionRes, allLeaveRes] = await Promise.all([
-      supabase.from("attendance").select("*").gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59").order("timestamp", { ascending: false }).limit(5000),
-      supabase.from("profiles").select("id, name, user_id, status").order("name"),
-      supabase.from("settings").select("*").limit(1).maybeSingle(),
-      supabase.from("leave_requests").select("*").eq("status", "approved").lte("start_date", format(new Date(), "yyyy-MM-dd")).gte("end_date", format(new Date(), "yyyy-MM-dd")),
-      supabase.from("work_sessions").select("*").gte("session_date", dateFrom).lte("session_date", dateTo).order("started_at", { ascending: false }).limit(1000),
-      supabase.from("leave_requests").select("*").order("created_at", { ascending: false }).limit(100),
-    ]);
-    setAttendance(attRes.data ?? []);
-    setStaffList(staffRes.data ?? []);
-    setStaffCount((staffRes.data ?? []).filter((s: any) => s.status === "active").length);
-    setSettings(settRes.data);
-    setApprovedLeaveToday((leaveRes.data ?? []).length);
-    setWorkSessions(workSessionRes.data ?? []);
-    setLeaveRequests(allLeaveRes.data ?? []);
+    try {
+      const [attRes, staffRes, settRes, leaveRes, workSessionRes, allLeaveRes] = await Promise.all([
+        supabase.from("attendance").select("*").gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59").order("timestamp", { ascending: false }).limit(5000),
+        supabase.from("profiles").select("id, name, user_id, status").order("name"),
+        supabase.from("settings").select("*").limit(1).maybeSingle(),
+        supabase.from("leave_requests").select("*").eq("status", "approved").lte("start_date", format(new Date(), "yyyy-MM-dd")).gte("end_date", format(new Date(), "yyyy-MM-dd")),
+        supabase.from("work_sessions").select("*").gte("session_date", dateFrom).lte("session_date", dateTo).order("started_at", { ascending: false }).limit(1000),
+        supabase.from("leave_requests").select("*").order("created_at", { ascending: false }).limit(100),
+      ]);
+      
+      if (attRes.error) {
+        console.error("Attendance fetch error:", attRes.error);
+        toast({ title: "Error", description: "Failed to load attendance records", variant: "destructive" });
+      }
+      
+      setAttendance(attRes.data ?? []);
+      setStaffList(staffRes.data ?? []);
+      setStaffCount((staffRes.data ?? []).filter((s: any) => s.status === "active").length);
+      setSettings(settRes.data);
+      setApprovedLeaveToday((leaveRes.data ?? []).length);
+      setWorkSessions(workSessionRes.data ?? []);
+      setLeaveRequests(allLeaveRes.data ?? []);
 
-    const events: any[] = [];
-    (attRes.data ?? []).forEach((a: any) => {
-      events.push({
-        id: `attendance-${a.id}`,
-        time: a.created_at || a.timestamp,
-        text: `${a.staff_name} ${a.status === 'present' ? 'clocked in' : a.status === 'late' ? 'clocked in late' : a.status === 'break' ? 'started break' : a.status}`,
-        type: 'attendance',
+      const events: any[] = [];
+      (attRes.data ?? []).forEach((a: any) => {
+        events.push({
+          id: `attendance-${a.id}`,
+          time: a.created_at || a.timestamp,
+          text: `${a.staff_name} ${a.status === 'present' ? 'clocked in' : a.status === 'late' ? 'clocked in late' : a.status === 'break' ? 'started break' : a.status}`,
+          type: 'attendance',
+        });
       });
-    });
-    (allLeaveRes.data ?? []).forEach((l: any) => {
-      events.push({
-        id: `leave-${l.id}`,
-        time: l.created_at,
-        text: `${l.staff_name} requested leave (${l.status}) from ${l.start_date} to ${l.end_date}`,
-        type: 'leave',
+      (allLeaveRes.data ?? []).forEach((l: any) => {
+        events.push({
+          id: `leave-${l.id}`,
+          time: l.created_at,
+          text: `${l.staff_name} requested leave (${l.status}) from ${l.start_date} to ${l.end_date}`,
+          type: 'leave',
+        });
       });
-    });
-    setActivityEvents(events.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()));
-
-    setLoading(false);
-  }, [dateFrom, dateTo]);
+      setActivityEvents(events.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()));
+    } catch (error: any) {
+      console.error("Dashboard data fetch error:", error);
+      toast({ title: "Error", description: "Failed to load dashboard data", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }, [dateFrom, dateTo, toast]);
 
   useEffect(() => {
     const statusParam = searchParams.get('status');
@@ -123,6 +134,9 @@ const AdminDashboard = () => {
       )
       .subscribe((status) => {
         console.log("Realtime subscription status:", status);
+        if (status === "CLOSED") {
+          console.warn("Realtime connection closed, will retry on next action");
+        }
       });
 
     return () => {

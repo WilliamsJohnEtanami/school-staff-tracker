@@ -74,25 +74,29 @@ Deno.serve(async (req) => {
         );
 
         if (staffNeedingReminders.length > 0) {
-          // Create in-app notifications for each staff member
+          // Create in-app notifications for each staff member using service role to bypass RLS
+          const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
           const notifications = staffNeedingReminders.map(staff => ({
             title: "Clock-in Reminder",
             message: `Don't forget to clock in for today's attendance. It's currently ${now.toLocaleTimeString()}.`,
             created_by: null,
           }));
 
-          const { error: notifError } = await supabase
+          const { error: notifError } = await supabaseAdmin
             .from("notifications")
             .insert(notifications);
 
           if (notifError) {
-            console.error("Failed to create notifications:", notifError);
+            console.error("Failed to create notifications:", notifError, notifError.message);
           }
         }
 
         return new Response(JSON.stringify({
-          message: `Clock-in reminders sent to ${staffNeedingReminders.length} staff members.`
+          success: true,
+          message: `Clock-in reminders sent to ${staffNeedingReminders.length} staff members.`,
+          sentTo: staffNeedingReminders.length
         }), {
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -217,7 +221,11 @@ Deno.serve(async (req) => {
     });
 
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error("Reminders edge function error:", error);
+    return new Response(JSON.stringify({ 
+      success: false,
+      error: error.message || "An unexpected error occurred" 
+    }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

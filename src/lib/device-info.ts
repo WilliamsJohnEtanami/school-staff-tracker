@@ -1,3 +1,11 @@
+export function getDeviceInfo() {
+  const ua = navigator.userAgent;
+  const browser = detectBrowser(ua);
+  const os = detectOS(ua);
+  const deviceType = detectDeviceType(ua);
+  return { browser, operating_system: os, device_type: deviceType };
+}
+
 export function parseDeviceInfo(ua: string) {
   const browser = detectBrowser(ua);
   const os = detectOS(ua);
