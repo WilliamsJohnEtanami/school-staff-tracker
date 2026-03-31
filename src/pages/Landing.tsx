@@ -131,16 +131,7 @@ const Landing = () => {
                 <Button size="lg" className="text-base px-8 gap-2" onClick={() => navigate("/login")}>
                   Get Started <ArrowRight className="w-4 h-4" />
                 </Button>
-                {adminExists === false && (
-                  <Button size="lg" variant="outline" className="text-base px-8" onClick={() => navigate("/admin/setup")}>
-                    Admin Setup
-                  </Button>
-                )}
-                {adminExists === null && (
-                  <Button size="lg" variant="outline" className="text-base px-8 opacity-60 cursor-wait" disabled>
-                    Checking...
-                  </Button>
-                )}
+
                 <Button size="lg" variant="outline" className="text-base px-8" onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}>
                   How It Works
                 </Button>

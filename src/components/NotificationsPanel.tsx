@@ -61,17 +61,26 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
     setLoading(true);
     setSchemaError(null);
 
-    // Fetch notifications
-    const notifRes = await supabase
-      .from("notifications")
-      .select("id,title,message,created_by,created_at")
-      .order("created_at", { ascending: false });
+    try {
+      // Fetch notifications
+      const notifRes = await supabase
+        .from("notifications")
+        .select("id,title,message,created_by,created_at")
+        .order("created_at", { ascending: false });
 
-    if (notifRes.error) {
-      const notFound = notifRes.error.message.toLowerCase().includes("relation \"public.notifications\" does not exist") || notifRes.error.code === "42P01";
-      setSchemaError(notFound ? "Notifications table does not exist. Run database migrations." : notifRes.error.message);
-      setNotifications(DEMO_NOTIFICATIONS.length > 0 ? DEMO_NOTIFICATIONS : []);
-      setStatuses({});
+      if (notifRes.error) {
+        const notFound = notifRes.error.message.toLowerCase().includes("relation \"public.notifications\" does not exist") || notifRes.error.code === "42P01";
+        const errorMsg = notFound 
+          ? "Notifications table not found. Please run database migrations: supabase db push"
+          : `Error loading notifications: ${notifRes.error.message}`;
+        setSchemaError(errorMsg);
+        setNotifications(DEMO_NOTIFICATIONS.length > 0 ? DEMO_NOTIFICATIONS : []);
+        setStatuses({});
+        setLoading(false);
+        return;
+      }
+    } catch (err: any) {
+      setSchemaError(`Failed to fetch notifications: ${err.message}`);
       setLoading(false);
       return;
     }
