@@ -23,6 +23,42 @@ export const isMissingPublicTableError = (
   );
 };
 
+export const isMissingPublicColumnError = (
+  error: SupabaseErrorLike | null | undefined,
+  tableName: string,
+  columnName?: string
+) => {
+  const message = normalize(error?.message);
+  const bareTable = tableName.toLowerCase();
+  const qualifiedTable = `public.${bareTable}`;
+  const bareColumn = columnName?.toLowerCase();
+
+  if (error?.code === "PGRST204") {
+    if (!bareColumn) return true;
+    return message.includes(`'${bareColumn}'`) || message.includes(`"${bareColumn}"`);
+  }
+
+  if (bareColumn) {
+    return (
+      message.includes(`could not find the '${bareColumn}' column of '${bareTable}' in the schema cache`) ||
+      message.includes(`could not find the "${bareColumn}" column of "${bareTable}" in the schema cache`) ||
+      message.includes(`column "${bareColumn}" of relation "${bareTable}" does not exist`) ||
+      message.includes(`column '${bareColumn}' of relation '${bareTable}' does not exist`) ||
+      message.includes(`column ${bareColumn} of relation "${bareTable}" does not exist`) ||
+      message.includes(`column ${bareColumn} of relation '${bareTable}' does not exist`) ||
+      message.includes(`column "${bareColumn}" does not exist`) ||
+      message.includes(`column '${bareColumn}' does not exist`)
+    );
+  }
+
+  return (
+    message.includes(`column of '${bareTable}' in the schema cache`) ||
+    message.includes(`column of "${bareTable}" in the schema cache`) ||
+    message.includes(`relation "${qualifiedTable}"`) ||
+    message.includes(`relation '${qualifiedTable}'`)
+  );
+};
+
 export const getNotificationSystemErrorMessage = (error: SupabaseErrorLike) => {
   if (isMissingPublicTableError(error, "notifications")) {
     return "Notifications are not available yet because the database schema is missing or stale. Run `supabase db push` to create the tables and reload the schema cache.";
@@ -33,6 +69,14 @@ export const getNotificationSystemErrorMessage = (error: SupabaseErrorLike) => {
   }
 
   return error.message || "The notification system is currently unavailable.";
+};
+
+export const getSettingsSystemErrorMessage = (error: SupabaseErrorLike) => {
+  if (isMissingPublicTableError(error, "settings") || isMissingPublicColumnError(error, "settings")) {
+    return "Settings are using a stale database schema. Run `supabase db push` to apply the latest settings migrations and reload the schema cache.";
+  }
+
+  return error.message || "The settings system is currently unavailable.";
 };
 
 export const getFunctionErrorMessage = (error: any) => {

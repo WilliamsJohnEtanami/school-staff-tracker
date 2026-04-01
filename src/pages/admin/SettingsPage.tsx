@@ -11,12 +11,14 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { getSettingsSystemErrorMessage, isMissingPublicColumnError } from "@/lib/supabase-errors";
 import { Loader2, Save, MapPin, Crosshair, RefreshCw, ChevronDown, CheckCircle2, ExternalLink, LogOut, Bell, Clock } from "lucide-react";
 
 const SettingsPage = () => {
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [schemaWarning, setSchemaWarning] = useState<string | null>(null);
   const { toast } = useToast();
   const { signOut } = useAuth();
   const navigate = useNavigate();
@@ -45,7 +47,12 @@ const SettingsPage = () => {
 
   useEffect(() => {
     const fetchSettings = async () => {
-      const { data } = await supabase.from("settings").select("*").limit(1).maybeSingle();
+      const { data, error } = await supabase.from("settings").select("*").limit(1).maybeSingle();
+      if (error) {
+        setSchemaWarning(getSettingsSystemErrorMessage(error));
+        setLoading(false);
+        return;
+      }
       if (data) {
         setSettings(data);
         setSchoolLat(data.school_latitude.toString());
@@ -60,6 +67,7 @@ const SettingsPage = () => {
         setWeeklyReports(data.weekly_reports ?? true);
         setReminderTime(data.reminder_time ?? "09:00");
       }
+      setSchemaWarning(null);
       setLoading(false);
     };
     fetchSettings();
@@ -146,12 +154,20 @@ const SettingsPage = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!settings?.id) {
+      toast({ title: "Error", description: "Settings record is not available yet.", variant: "destructive" });
+      return;
+    }
+
     setSaving(true);
-    const { error } = await supabase.from("settings").update({
+    const basePayload = {
       school_latitude: parseFloat(schoolLat),
       school_longitude: parseFloat(schoolLng),
       allowed_radius: parseInt(radius),
       late_time: lateTime + ":00",
+    };
+
+    const reminderPayload = {
       alert_time: alertTime + ":00",
       alert_email: alertEmail,
       clock_in_reminder: clockInReminder,
@@ -159,11 +175,38 @@ const SettingsPage = () => {
       daily_alerts: dailyAlerts,
       weekly_reports: weeklyReports,
       reminder_time: reminderTime + ":00",
-    }).eq("id", settings.id);
+    };
+
+    let { error } = await supabase
+      .from("settings")
+      .update({ ...basePayload, ...reminderPayload })
+      .eq("id", settings.id);
+
+    if (error && isMissingPublicColumnError(error, "settings")) {
+      const fallback = await supabase
+        .from("settings")
+        .update(basePayload)
+        .eq("id", settings.id);
+
+      setSaving(false);
+
+      if (fallback.error) {
+        toast({ title: "Error", description: getSettingsSystemErrorMessage(fallback.error), variant: "destructive" });
+        return;
+      }
+
+      const warning =
+        "Location and attendance rules were saved, but reminder settings still need the latest database migration.";
+      setSchemaWarning(warning);
+      toast({ title: "Partial Save", description: warning, variant: "destructive" });
+      return;
+    }
+
     setSaving(false);
     if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Error", description: getSettingsSystemErrorMessage(error), variant: "destructive" });
     } else {
+      setSchemaWarning(null);
       toast({ title: "School Location Set Successfully", description: "Location and settings have been saved." });
     }
   };
@@ -182,6 +225,12 @@ const SettingsPage = () => {
   return (
     <div className="p-4 md:p-6 space-y-6">
       <h2 className="text-2xl font-bold text-foreground">Settings</h2>
+
+      {schemaWarning && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {schemaWarning}
+        </div>
+      )}
 
       {/* GPS Detection Card */}
       <Card>
