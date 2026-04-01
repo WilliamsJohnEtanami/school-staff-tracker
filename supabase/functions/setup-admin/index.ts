@@ -5,110 +5,186 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const jsonHeaders = {
+  ...corsHeaders,
+  "Content-Type": "application/json",
+};
+
+const normalizeEmail = (email: string | null | undefined) => (email ?? "").trim().toLowerCase();
+
+const jsonResponse = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: jsonHeaders });
+
+const getSupabaseAdmin = () => {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("Missing Supabase environment variables");
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey);
+};
+
+const getExistingAdminUserId = async (supabaseAdmin: ReturnType<typeof createClient>) => {
+  const { data: existingAdmins, error } = await supabaseAdmin
+    .from("user_roles")
+    .select("user_id")
+    .eq("role", "admin")
+    .limit(1);
+
+  if (error) {
+    throw new Error(`Database check failed: ${error.message}`);
+  }
+
+  return existingAdmins?.[0]?.user_id ?? null;
+};
+
+const findAuthUserByEmail = async (
+  supabaseAdmin: ReturnType<typeof createClient>,
+  email: string
+) => {
+  let page = 1;
+  const perPage = 200;
+
+  while (true) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+
+    if (error) {
+      throw new Error(`User lookup failed: ${error.message}`);
+    }
+
+    const matchingUser = data.users.find((user) => normalizeEmail(user.email) === email);
+
+    if (matchingUser) {
+      return matchingUser;
+    }
+
+    if (!data.nextPage || page >= data.lastPage) {
+      return null;
+    }
+
+    page = data.nextPage;
+  }
+};
+
+const ensureAdminRecords = async (
+  supabaseAdmin: ReturnType<typeof createClient>,
+  userId: string,
+  name: string,
+  email: string
+) => {
+  const { error: profileError } = await supabaseAdmin.from("profiles").upsert(
+    {
+      user_id: userId,
+      name,
+      email,
+      status: "active",
+    },
+    { onConflict: "user_id" }
+  );
+
+  if (profileError) {
+    throw new Error(`Profile repair failed: ${profileError.message}`);
+  }
+
+  const { error: roleError } = await supabaseAdmin.from("user_roles").upsert(
+    {
+      user_id: userId,
+      role: "admin",
+    },
+    { onConflict: "user_id,role" }
+  );
+
+  if (roleError) {
+    throw new Error(`Role assignment failed: ${roleError.message}`);
+  }
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Allow GET to check whether any admin exists (used by frontend to hide setup link)
   if (req.method === "GET") {
     try {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL");
-      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-      if (!supabaseUrl || !serviceRoleKey) {
-        throw new Error("Missing Supabase environment variables");
-      }
-      const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-      const { data: existingAdmins, error: checkError } = await supabaseAdmin
-        .from("user_roles")
-        .select("id")
-        .eq("role", "admin")
-        .limit(1);
-      if (checkError) throw checkError;
-      const exists = Array.isArray(existingAdmins) && existingAdmins.length > 0;
-      return new Response(JSON.stringify({ exists }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const supabaseAdmin = getSupabaseAdmin();
+      const exists = Boolean(await getExistingAdminUserId(supabaseAdmin));
+      return jsonResponse({ exists });
     } catch (err: any) {
       console.error("Setup GET error:", err);
-      return new Response(JSON.stringify({ error: err.message || "Error checking admin" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return jsonResponse({ error: err.message || "Error checking admin" }, 500);
     }
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error("Missing Supabase environment variables");
-    }
-    
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const supabaseAdmin = getSupabaseAdmin();
 
     const body = await req.json();
-    const { email, password, name } = body;
-    
+    const email = normalizeEmail(body.email);
+    const password = typeof body.password === "string" ? body.password : "";
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+
     if (!email || !password || !name) {
       throw new Error("Missing required fields: email, password, name");
     }
 
-    // Check if any admin exists
-    const { data: existingAdmins, error: checkError } = await supabaseAdmin
-      .from("user_roles")
-      .select("id")
-      .eq("role", "admin")
-      .limit(1);
-    
-    if (checkError) {
-      throw new Error(`Database check failed: ${checkError.message}`);
-    }
-    
-    if (existingAdmins && existingAdmins.length > 0) {
-      return new Response(
-        JSON.stringify({ error: "Admin account already exists. Please use the login page." }),
-        {
-          status: 409,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+    const existingAdminUserId = await getExistingAdminUserId(supabaseAdmin);
+    const existingAuthUser = await findAuthUserByEmail(supabaseAdmin, email);
+
+    if (existingAdminUserId) {
+      return jsonResponse(
+        { error: "Admin account already exists. Please use the login page." },
+        409
       );
     }
 
-    // Create admin user
-    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { name },
-    });
-    
-    if (createError) {
-      throw new Error(`Auth create failed: ${createError.message}`);
-    }
+    let userId: string;
+    let recovered = false;
 
-    // Assign admin role
-    const { error: roleError } = await supabaseAdmin
-      .from("user_roles")
-      .insert({ user_id: newUser.user.id, role: "admin" });
-    
-    if (roleError) {
-      throw new Error(`Role assignment failed: ${roleError.message}`);
-    }
+    if (existingAuthUser) {
+      recovered = true;
 
-    return new Response(
-      JSON.stringify({ success: true, user_id: newUser.user.id }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const { data: updatedUser, error: updateError } =
+        await supabaseAdmin.auth.admin.updateUserById(existingAuthUser.id, {
+          password,
+          email_confirm: true,
+          user_metadata: {
+            ...(existingAuthUser.user_metadata ?? {}),
+            name,
+          },
+        });
+
+      if (updateError) {
+        throw new Error(`Admin repair failed: ${updateError.message}`);
       }
-    );
+
+      userId = updatedUser.user?.id ?? existingAuthUser.id;
+    } else {
+      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { name },
+      });
+
+      if (createError) {
+        throw new Error(`Auth create failed: ${createError.message}`);
+      }
+
+      userId = newUser.user.id;
+    }
+
+    await ensureAdminRecords(supabaseAdmin, userId, name, email);
+
+    return jsonResponse({ success: true, recovered, user_id: userId });
   } catch (error: any) {
     console.error("Setup error:", error);
-    return new Response(
-      JSON.stringify({ 
-        error: error.message || "An unexpected error occurred during admin setup"
-      }),
+    return jsonResponse(
       {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+        error: error.message || "An unexpected error occurred during admin setup",
+      },
+      400
     );
   }
 });
