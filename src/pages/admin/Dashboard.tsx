@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import NotificationsPanel from "@/components/NotificationsPanel";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Users, UserCheck, UserX, Clock, ExternalLink, Loader2, Download, ChevronDown, ChevronUp, Search, ArrowUpDown, Plus, Bell, BellRing, FileText, Calendar } from "lucide-react";
+import { Users, UserCheck, UserX, Clock, ExternalLink, Loader2, Download, ChevronDown, ChevronUp, Search, ArrowUpDown, Plus, Bell, BellRing, FileText, Calendar, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { getDistanceInMeters } from "@/lib/geo";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +25,7 @@ type SortKey = "timestamp" | "staff_name" | "status";
 type SortDir = "asc" | "desc";
 
 const AdminDashboard = () => {
+  const { user } = useAuth();
   const [attendance, setAttendance] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [staffCount, setStaffCount] = useState(0);
@@ -44,6 +46,8 @@ const AdminDashboard = () => {
   const [page, setPage] = useState(0);
   const [sortKey, setSortKey] = useState<SortKey>("timestamp");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [adminRoleWarning, setAdminRoleWarning] = useState<string | null>(null);
+  const [realtimeWarning, setRealtimeWarning] = useState<string | null>(null);
   const { toast } = useToast();
   const { loading: reminderLoading, triggerClockInReminders, triggerClockOutReminders, triggerWeeklyReports, triggerPendingLeaveReminders } = useReminders();
 
@@ -71,7 +75,15 @@ const AdminDashboard = () => {
       
       if (attRes.error) {
         console.error("Attendance fetch error:", attRes.error);
-        toast({ title: "Error", description: "Failed to load attendance records", variant: "destructive" });
+        const errorMsg = attRes.error.code === "42P01" 
+          ? "Attendance table not accessible. Please check database migrations."
+          : attRes.error.message || "Failed to load attendance records";
+        toast({ title: "Attendance Data Error", description: errorMsg, variant: "destructive" });
+      }
+      
+      if (staffRes.error) {
+        console.error("Staff fetch error:", staffRes.error);
+        toast({ title: "Staff List Error", description: "Failed to load staff list", variant: "destructive" });
       }
       
       setAttendance(attRes.data ?? []);
@@ -82,6 +94,10 @@ const AdminDashboard = () => {
       setWorkSessions(workSessionRes.data ?? []);
       setLeaveRequests(allLeaveRes.data ?? []);
 
+      const staffNameByUserId = new Map<string, string>(
+        (staffRes.data ?? []).map((staff: any) => [staff.user_id, staff.name])
+      );
+
       const events: any[] = [];
       (attRes.data ?? []).forEach((a: any) => {
         events.push({
@@ -90,6 +106,34 @@ const AdminDashboard = () => {
           text: `${a.staff_name} ${a.status === 'present' ? 'clocked in' : a.status === 'late' ? 'clocked in late' : a.status === 'break' ? 'started break' : a.status}`,
           type: 'attendance',
         });
+      });
+      (workSessionRes.data ?? []).forEach((session: any) => {
+        const staffName = staffNameByUserId.get(session.user_id) ?? session.user_id;
+        const sessionStartText =
+          session.type === "break" ? `${staffName} started a break` :
+          session.type === "off-site" ? `${staffName} went off-site` :
+          `${staffName} started work`;
+
+        events.push({
+          id: `session-start-${session.id}`,
+          time: session.started_at,
+          text: sessionStartText,
+          type: "work_session",
+        });
+
+        if (session.ended_at) {
+          const sessionEndText =
+            session.type === "break" ? `${staffName} ended a break` :
+            session.type === "off-site" ? `${staffName} returned on-site` :
+            `${staffName} ended work`;
+
+          events.push({
+            id: `session-end-${session.id}`,
+            time: session.ended_at,
+            text: sessionEndText,
+            type: "work_session",
+          });
+        }
       });
       (allLeaveRes.data ?? []).forEach((l: any) => {
         events.push({
@@ -102,11 +146,38 @@ const AdminDashboard = () => {
       setActivityEvents(events.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()));
     } catch (error: any) {
       console.error("Dashboard data fetch error:", error);
-      toast({ title: "Error", description: "Failed to load dashboard data", variant: "destructive" });
+      toast({ title: "Dashboard Error", description: error.message || "Failed to load dashboard data", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }, [dateFrom, dateTo, toast]);
+
+  useEffect(() => {
+    // Verify admin role exists in user_roles table
+    const verifyAdminRole = async () => {
+      if (!user?.id) return;
+      try {
+        const { data, error } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("role", "admin");
+        
+        if (error) {
+          console.warn("Admin role check error:", error);
+          setAdminRoleWarning("Could not verify admin role - some features may be limited");
+        } else if (!data || data.length === 0) {
+          setAdminRoleWarning("Admin role not found in system. Attendance data may not be visible.");
+        } else {
+          setAdminRoleWarning(null);
+        }
+      } catch (err) {
+        console.warn("Admin role verification failed:", err);
+      }
+    };
+
+    verifyAdminRole();
+  }, [user?.id]);
 
   useEffect(() => {
     const statusParam = searchParams.get('status');
@@ -121,28 +192,47 @@ const AdminDashboard = () => {
 
     fetchData();
 
-    // Set up real-time listener for new attendance records
+    const handleRealtimeChange = (payload: any) => {
+      console.log("Admin dashboard realtime change detected:", payload);
+      fetchData();
+    };
+
+    // Set up real-time listener for attendance, work sessions, and leave activity
     const channel = supabase
-      .channel("attendance-realtime-dash")
+      .channel("admin-activity-realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "attendance" },
-        (payload) => {
-          console.log("Attendance change detected:", payload);
-          fetchData(); // Refetch all data when attendance changes
-        }
+        handleRealtimeChange
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "work_sessions" }, handleRealtimeChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "leave_requests" }, handleRealtimeChange)
       .subscribe((status) => {
         console.log("Realtime subscription status:", status);
-        if (status === "CLOSED") {
-          console.warn("Realtime connection closed, will retry on next action");
+        if (status === "SUBSCRIBED") {
+          setRealtimeWarning(null);
+          console.log("✓ Real-time attendance updates enabled");
+        } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+          console.warn("⚠ Realtime connection failed, polling fallback active");
+          setRealtimeWarning("Real-time updates are unavailable right now. The dashboard is using polling fallback.");
         }
       });
 
+    const pollInterval = setInterval(fetchData, 30000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, [fetchData, searchParams]);
+
+  const staffNameByUserId = useMemo(() => {
+    const lookup = new Map<string, string>();
+    staffList.forEach((staff: any) => {
+      lookup.set(staff.user_id, staff.name);
+    });
+    return lookup;
+  }, [staffList]);
 
   const calcDistance = useCallback((lat: number, lng: number) => {
     if (!settings) return null;
@@ -321,6 +411,26 @@ const AdminDashboard = () => {
     <div className="p-4 md:p-6 space-y-6">
       <h2 className="text-2xl font-bold text-foreground">Dashboard</h2>
 
+      {adminRoleWarning && (
+        <div className="flex items-start gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-yellow-800">{adminRoleWarning}</p>
+            <p className="text-xs text-yellow-700 mt-1">Please refresh the page or contact support if this persists.</p>
+          </div>
+        </div>
+      )}
+
+      {realtimeWarning && (
+        <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <AlertTriangle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-blue-800">{realtimeWarning}</p>
+            <p className="text-xs text-blue-700 mt-1">Changes should still appear within 30 seconds while polling is active.</p>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         {[
           { value: 'all', label: 'All' },
@@ -458,7 +568,7 @@ const AdminDashboard = () => {
                     const duration = start && end ? `${((end.getTime() - start.getTime()) / 3600000).toFixed(2)}h` : "Ongoing";
                     return (
                       <TableRow key={ws.id}>
-                        <TableCell>{ws.user_id || ws.staff_name}</TableCell>
+                        <TableCell>{staffNameByUserId.get(ws.user_id) ?? ws.staff_name ?? ws.user_id}</TableCell>
                         <TableCell>{ws.session_date}</TableCell>
                         <TableCell>{ws.type}</TableCell>
                         <TableCell>{start ? start.toLocaleTimeString() : "-"}</TableCell>

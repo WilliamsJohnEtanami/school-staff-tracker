@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { isMissingPublicTableError } from "@/lib/supabase-errors";
 
 export const useNotificationCount = () => {
   const { user } = useAuth();
@@ -23,7 +24,13 @@ export const useNotificationCount = () => {
         .eq("user_id", user.id),
     ]);
 
-    if (notifRes.error || statusRes.error) {
+    if (notifRes.error) {
+      setLoading(false);
+      setUnreadCount(0);
+      return;
+    }
+
+    if (statusRes.error && !isMissingPublicTableError(statusRes.error, "notification_statuses")) {
       setLoading(false);
       setUnreadCount(0);
       return;
@@ -48,7 +55,7 @@ export const useNotificationCount = () => {
     const channel = supabase
       .channel("notifications_count")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, fetchUnreadCount)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notification_statuses" }, fetchUnreadCount)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notification_statuses" }, fetchUnreadCount)
       .subscribe();
 
     return () => {

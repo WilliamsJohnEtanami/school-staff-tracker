@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -9,6 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useSchemaHealth } from "@/hooks/use-schema-health";
+import {
+  getFunctionErrorMessage,
+  getNotificationSystemErrorMessage,
+  isMissingPublicTableError,
+} from "@/lib/supabase-errors";
 
 export type Notification = {
   id: string;
@@ -42,6 +47,7 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
   const { toast } = useToast();
   const schemaHealth = useSchemaHealth();
   const [schemaError, setSchemaError] = useState<string | null>(null);
+  const lastSchemaToast = useRef<string | null>(null);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [statuses, setStatuses] = useState<Record<string, boolean>>({});
@@ -56,6 +62,20 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
     [notifications, statuses]
   );
 
+  const reportSchemaError = useCallback((message: string) => {
+    setSchemaError(message);
+
+    if (lastSchemaToast.current !== message) {
+      toast({ title: "Notification System Issue", description: message, variant: "destructive" });
+      lastSchemaToast.current = message;
+    }
+  }, [toast]);
+
+  const clearSchemaError = useCallback(() => {
+    setSchemaError(null);
+    lastSchemaToast.current = null;
+  }, []);
+
   const fetchNotifications = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
@@ -69,11 +89,8 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
         .order("created_at", { ascending: false });
 
       if (notifRes.error) {
-        const notFound = notifRes.error.message.toLowerCase().includes("relation \"public.notifications\" does not exist") || notifRes.error.code === "42P01";
-        const errorMsg = notFound 
-          ? "Notifications table not found. Please run database migrations: supabase db push"
-          : `Error loading notifications: ${notifRes.error.message}`;
-        setSchemaError(errorMsg);
+        const errorMsg = getNotificationSystemErrorMessage(notifRes.error);
+        reportSchemaError(errorMsg);
         setNotifications(DEMO_NOTIFICATIONS.length > 0 ? DEMO_NOTIFICATIONS : []);
         setStatuses({});
         setLoading(false);
@@ -96,8 +113,7 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
 
       if (statusRes.error) {
         // Don't show error for missing notification_statuses table - just treat as empty
-        const notFound = statusRes.error.message.toLowerCase().includes("relation \"public.notification_statuses\" does not exist") || statusRes.error.code === "42P01";
-        if (!notFound) {
+        if (!isMissingPublicTableError(statusRes.error, "notification_statuses")) {
           console.warn("Notification statuses query error:", statusRes.error);
         }
         // Default to all notifications being unread if table doesn't exist
@@ -109,13 +125,15 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
         });
         setStatuses(statusMap);
       }
+
+      lastSchemaToast.current = null;
     } catch (err: any) {
-      setSchemaError(`Failed to fetch notifications: ${err.message}`);
+      reportSchemaError(`Failed to fetch notifications: ${err.message}`);
       setNotifications(DEMO_NOTIFICATIONS);
     }
 
     setLoading(false);
-  }, [userId]);
+  }, [reportSchemaError, userId]);
 
   const setAsRead = async (notificationId: string) => {
     if (!userId) return;
@@ -130,8 +148,7 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
     );
 
     if (error) {
-      const isTableMissing = error.message.toLowerCase().includes("relation \"public.notification_statuses\" does not exist") || error.code === "42P01";
-      if (!isTableMissing) {
+      if (!isMissingPublicTableError(error, "notification_statuses")) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
       }
       // Silently fail if table doesn't exist - user can still see notifications
@@ -154,8 +171,7 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
     });
 
     if (error) {
-      const isTableMissing = error.message.toLowerCase().includes("relation \"public.notification_statuses\" does not exist") || error.code === "42P01";
-      if (!isTableMissing) {
+      if (!isMissingPublicTableError(error, "notification_statuses")) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
       }
       // Silently fail if table doesn't exist
@@ -169,7 +185,7 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
     setStatuses((prev) => ({ ...prev, ...newStatuses }));
   };
 
-  const broadcastNotification = async () => {
+  const broadcastNotification = useCallback(async () => {
     if (!userId) {
       toast({ title: "Error", description: "You must be signed in to broadcast.", variant: "destructive" });
       return;
@@ -181,29 +197,61 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
     }
 
     setSending(true);
-    const { error } = await supabase.from("notifications").insert({
-      title: title.trim(),
-      message: message.trim(),
-      created_by: userId,
+    const { data, error } = await supabase.functions.invoke("broadcast-notification", {
+      body: {
+        title: title.trim(),
+        message: message.trim(),
+      },
     });
-
     setSending(false);
 
     if (error) {
-      const notFound = error.message.toLowerCase().includes("relation \"public.notifications\" does not exist") || error.code === "42P01";
-      if (notFound) {
-        setSchemaError("Notifications table does not exist. Run database migrations.");
+      const errorMessage = getFunctionErrorMessage(error);
+      const lowerMessage = errorMessage.toLowerCase();
+
+      if (lowerMessage.includes("edge function")) {
+        const fallbackInsert = await supabase.from("notifications").insert({
+          title: title.trim(),
+          message: message.trim(),
+          created_by: userId,
+        });
+
+        if (!fallbackInsert.error) {
+          clearSchemaError();
+          setTitle("");
+          setMessage("");
+          toast({ title: "Broadcast Sent", description: "All staff will see this message in notifications." });
+          fetchNotifications();
+          return;
+        }
+
+        if (isMissingPublicTableError(fallbackInsert.error, "notifications")) {
+          reportSchemaError(getNotificationSystemErrorMessage(fallbackInsert.error));
+        } else {
+          toast({ title: "Error", description: fallbackInsert.error.message, variant: "destructive" });
+        }
+        return;
+      }
+
+      if (
+        isMissingPublicTableError(error, "notifications") ||
+        lowerMessage.includes("notifications table") ||
+        lowerMessage.includes("schema cache") ||
+        lowerMessage.includes("supabase db push")
+      ) {
+        reportSchemaError(errorMessage);
       } else {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
+        toast({ title: "Error", description: errorMessage, variant: "destructive" });
       }
       return;
     }
 
+    clearSchemaError();
     setTitle("");
     setMessage("");
-    toast({ title: "Broadcast Sent", description: "All staff will see this message in notifications." });
+    toast({ title: "Broadcast Sent", description: data?.message ?? "All staff will see this message in notifications." });
     fetchNotifications();
-  };
+  }, [clearSchemaError, fetchNotifications, reportSchemaError, title, message, userId, toast]);
 
   useEffect(() => {
     if (!schemaHealth.loading) {
@@ -263,8 +311,6 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
 
         {loading ? (
           <p>Loading notifications...</p>
-        ) : schemaError ? (
-          <p className="text-destructive text-sm">{schemaError}</p>
         ) : notifications.length === 0 ? (
           <>
             <p className="text-muted-foreground">No notifications yet. Showing demo notifications.</p>
