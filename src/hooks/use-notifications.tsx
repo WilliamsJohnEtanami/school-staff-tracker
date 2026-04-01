@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getNotificationSystemErrorMessage, isMissingPublicTableError } from "@/lib/supabase-errors";
 
 export type Notification = {
   id: string;
@@ -20,36 +21,45 @@ export const useNotifications = (userId: string | null) => {
     setLoading(true);
     setError(null);
 
-    const { data, error: notifError } = await supabase
+    const { data: notifData, error: notifError } = await supabase
       .from("notifications")
-      .select(`
-        id,
-        title,
-        message,
-        created_by,
-        created_at,
-        notification_statuses!left(id, read, user_id)
-      `)
+      .select("id,title,message,created_by,created_at")
       .order("created_at", { ascending: false });
 
     if (notifError) {
-      setError(notifError.message);
+      setError(getNotificationSystemErrorMessage(notifError));
       setNotifications([]);
-    } else {
-      const normalized: Notification[] = (data || []).map((row: any) => {
-        const status = (row.notification_statuses ?? []).find((s: any) => s?.user_id === userId);
-
-        return {
-          id: row.id,
-          title: row.title,
-          message: row.message,
-          created_by: row.created_by,
-          created_at: row.created_at,
-          read: status?.read ?? false,
-        };
-      });
-      setNotifications(normalized);
+      setLoading(false);
+      return;
     }
+
+    const { data: statusData, error: statusError } = await supabase
+      .from("notification_statuses")
+      .select("notification_id,read,user_id")
+      .eq("user_id", userId);
+
+    if (statusError && !isMissingPublicTableError(statusError, "notification_statuses")) {
+      setError(getNotificationSystemErrorMessage(statusError));
+      setNotifications([]);
+      setLoading(false);
+      return;
+    }
+
+    const statusByNotificationId = new Map<string, boolean>();
+    (statusData ?? []).forEach((status) => {
+      statusByNotificationId.set(status.notification_id, status.read);
+    });
+
+    const normalized: Notification[] = (notifData || []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      message: row.message,
+      created_by: row.created_by,
+      created_at: row.created_at,
+      read: statusByNotificationId.get(row.id) ?? false,
+    }));
+
+    setNotifications(normalized);
 
     setLoading(false);
   }, [userId]);
@@ -66,12 +76,8 @@ export const useNotifications = (userId: string | null) => {
         );
 
       if (stateError) {
-        const isTableMissing =
-          stateError.message.toLowerCase().includes("relation \"public.notification_statuses\" does not exist") ||
-          stateError.code === "42P01";
-
-        if (!isTableMissing) {
-          setError(stateError.message);
+        if (!isMissingPublicTableError(stateError, "notification_statuses")) {
+          setError(getNotificationSystemErrorMessage(stateError));
         }
         return;
       }

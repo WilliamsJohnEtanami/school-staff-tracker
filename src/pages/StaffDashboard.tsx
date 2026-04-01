@@ -21,6 +21,7 @@ type AttendanceRecord = {
   user_id: string;
   staff_name: string;
   timestamp: string;
+  clock_out?: string | null;
   status: string;
   latitude: number;
   longitude: number;
@@ -28,6 +29,16 @@ type AttendanceRecord = {
   browser?: string;
   operating_system?: string;
   device_type?: string;
+};
+
+type WorkSessionRecord = {
+  id: string;
+  user_id: string;
+  session_date: string;
+  type: SessionType;
+  started_at: string;
+  ended_at: string | null;
+  created_at: string;
 };
 
 interface Notification {
@@ -51,6 +62,8 @@ const StaffDashboard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [distanceToSchool, setDistanceToSchool] = useState<number | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [todaySessions, setTodaySessions] = useState<WorkSessionRecord[]>([]);
+  const [activeSession, setActiveSession] = useState<WorkSessionRecord | null>(null);
   const [clockOutTime, setClockOutTime] = useState<Date | null>(null);
 
   // Fetch today's attendance record
@@ -69,11 +82,31 @@ const StaffDashboard = () => {
     
     if (data) {
       setTodayAttendance(data);
-      // Determine session state based on attendance record
-      if (data.status === "present" || data.status === "late") {
-        setSessionState("IN_WORK");
-      }
+    } else {
+      setTodayAttendance(null);
     }
+  }, [user?.id]);
+
+  const fetchTodaySessions = useCallback(async () => {
+    if (!user?.id) return;
+    const today = new Date().toISOString().split("T")[0];
+    const { data, error } = await supabase
+      .from("work_sessions")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("session_date", today)
+      .order("started_at", { ascending: false });
+
+    if (error) {
+      console.warn("Work sessions fetch error:", error);
+      setTodaySessions([]);
+      setActiveSession(null);
+      return;
+    }
+
+    const sessions = (data ?? []) as WorkSessionRecord[];
+    setTodaySessions(sessions);
+    setActiveSession(sessions.find((session) => !session.ended_at) ?? null);
   }, [user?.id]);
 
   // Fetch settings and calculate distance
@@ -100,9 +133,39 @@ const StaffDashboard = () => {
 
   useEffect(() => {
     fetchTodayAttendance();
+    fetchTodaySessions();
     fetchSettingsAndDistance();
     fetchNotifications();
-  }, [fetchTodayAttendance, fetchSettingsAndDistance, fetchNotifications]);
+  }, [fetchTodayAttendance, fetchTodaySessions, fetchSettingsAndDistance, fetchNotifications]);
+
+  useEffect(() => {
+    if (todayAttendance?.clock_out) {
+      setSessionState("CLOCKED_OUT");
+      return;
+    }
+
+    if (activeSession?.type === "break") {
+      setSessionState("IN_BREAK");
+      return;
+    }
+
+    if (activeSession?.type === "off-site") {
+      setSessionState("IN_OFFSITE");
+      return;
+    }
+
+    if (activeSession?.type === "work") {
+      setSessionState("IN_WORK");
+      return;
+    }
+
+    if (todayAttendance) {
+      setSessionState("IN_WORK");
+      return;
+    }
+
+    setSessionState("NOT_CLOCKED_IN");
+  }, [activeSession, todayAttendance]);
 
   // Real-time listener for attendance changes
   useEffect(() => {
@@ -122,6 +185,24 @@ const StaffDashboard = () => {
       supabase.removeChannel(channel);
     };
   }, [user?.id, fetchTodayAttendance]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel("staff-work-sessions-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "work_sessions", filter: `user_id=eq.${user.id}` },
+        () => {
+          fetchTodaySessions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchTodaySessions, user?.id]);
 
   // Real-time listener for notifications
   useEffect(() => {
@@ -171,16 +252,36 @@ const StaffDashboard = () => {
           longitude,
           device_info: deviceInfo.device_type,
           browser: deviceInfo.browser,
-          operating_system: deviceInfo.os,
+          operating_system: deviceInfo.operating_system,
           device_type: deviceInfo.device_type,
         }),
       });
 
       const result = await response.json();
       if (response.ok) {
-        toast({ title: "Success", description: `Clocked in successfully. Status: ${result.status}`, variant: "default" });
+        const nowIso = new Date().toISOString();
+        const sessionDate = nowIso.split("T")[0];
+
+        const { error: sessionError } = await supabase.from("work_sessions").insert({
+          user_id: user.id,
+          session_date: sessionDate,
+          type: "work",
+          started_at: nowIso,
+        });
+
+        if (sessionError) {
+          console.warn("Work session creation error:", sessionError);
+          toast({
+            title: "Clocked In",
+            description: `Attendance was recorded, but the live activity session could not be created: ${sessionError.message}`,
+            variant: "destructive",
+          });
+        } else {
+          toast({ title: "Success", description: `Clocked in successfully. Status: ${result.status}`, variant: "default" });
+        }
+
         setSessionState("IN_WORK");
-        fetchTodayAttendance();
+        await Promise.all([fetchTodayAttendance(), fetchTodaySessions()]);
       } else {
         toast({ title: "Error", description: result.error || "Failed to clock in", variant: "destructive" });
       }
@@ -191,14 +292,75 @@ const StaffDashboard = () => {
     }
   };
 
+  const transitionSession = async (nextType: SessionType, successMessage: string) => {
+    if (!user?.id || !activeSession) return;
+
+    setIsLoading(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const sessionDate = nowIso.split("T")[0];
+
+      const { error: closeError } = await supabase
+        .from("work_sessions")
+        .update({ ended_at: nowIso })
+        .eq("id", activeSession.id)
+        .is("ended_at", null);
+
+      if (closeError) throw closeError;
+
+      const { error: nextSessionError } = await supabase.from("work_sessions").insert({
+        user_id: user.id,
+        session_date: sessionDate,
+        type: nextType,
+        started_at: nowIso,
+      });
+
+      if (nextSessionError) throw nextSessionError;
+
+      toast({ title: "Success", description: successMessage });
+      await fetchTodaySessions();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Session update failed", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const startBreak = async () => {
+    if (sessionState !== "IN_WORK") return;
+    await transitionSession("break", "Break started.");
+  };
+
+  const startOffSite = async () => {
+    if (sessionState !== "IN_WORK") return;
+    await transitionSession("off-site", "Off-site session started.");
+  };
+
+  const resumeWork = async () => {
+    if (sessionState !== "IN_BREAK" && sessionState !== "IN_OFFSITE") return;
+    await transitionSession("work", "Work session resumed.");
+  };
+
   const handleClockOut = async () => {
     setIsLoading(true);
     try {
       // Update attendance record to mark clock_out time
       if (todayAttendance?.id) {
+        const nowIso = new Date().toISOString();
+
+        if (activeSession?.id) {
+          const { error: sessionError } = await supabase
+            .from("work_sessions")
+            .update({ ended_at: nowIso })
+            .eq("id", activeSession.id)
+            .is("ended_at", null);
+
+          if (sessionError) throw sessionError;
+        }
+
         const { error } = await supabase
           .from("attendance")
-          .update({ clock_out: new Date().toISOString() })
+          .update({ clock_out: nowIso })
           .eq("id", todayAttendance.id);
 
         if (error) throw error;
@@ -206,7 +368,7 @@ const StaffDashboard = () => {
         toast({ title: "Success", description: "Clocked out successfully" });
         setSessionState("CLOCKED_OUT");
         setClockOutTime(new Date());
-        fetchTodayAttendance();
+        await Promise.all([fetchTodayAttendance(), fetchTodaySessions()]);
       }
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Clock out failed", variant: "destructive" });
@@ -227,9 +389,11 @@ const StaffDashboard = () => {
     switch (status) {
       case "present":
       case "late":
+      case "work":
         return <Briefcase className="h-4 w-4 mr-2" />;
       case "break":
         return <Coffee className="h-4 w-4 mr-2" />;
+      case "off-site":
       default:
         return <MapPin className="h-4 w-4 mr-2" />;
     }
@@ -249,7 +413,35 @@ const StaffDashboard = () => {
         );
       case "IN_WORK":
         return (
-          <div className="grid grid-cols-1 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Button onClick={startBreak} variant="outline" className="h-12">
+              <Pause className="h-4 w-4 mr-2" /> Start Break
+            </Button>
+            <Button onClick={startOffSite} variant="outline" className="h-12">
+              <MapPin className="h-4 w-4 mr-2" /> Go Off-site
+            </Button>
+            <Button onClick={handleClockOut} variant="destructive" className="h-12 sm:col-span-2">
+              <Power className="h-4 w-4 mr-2" /> Clock Out
+            </Button>
+          </div>
+        );
+      case "IN_BREAK":
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Button onClick={resumeWork} className="h-12">
+              <Briefcase className="h-4 w-4 mr-2" /> End Break
+            </Button>
+            <Button onClick={handleClockOut} variant="destructive" className="h-12">
+              <Power className="h-4 w-4 mr-2" /> Clock Out
+            </Button>
+          </div>
+        );
+      case "IN_OFFSITE":
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Button onClick={resumeWork} className="h-12">
+              <Briefcase className="h-4 w-4 mr-2" /> Return On-site
+            </Button>
             <Button onClick={handleClockOut} variant="destructive" className="h-12">
               <Power className="h-4 w-4 mr-2" /> Clock Out
             </Button>
@@ -338,6 +530,33 @@ const StaffDashboard = () => {
         <div className="space-y-2">
           {renderActionButtons()}
         </div>
+
+        {todaySessions.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Today's Activity Sessions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {todaySessions.map((session) => (
+                <div key={session.id} className="flex items-center justify-between rounded-lg border p-3">
+                  <div className="flex items-center text-sm">
+                    {getIconForType(session.type)}
+                    <div>
+                      <p className="font-medium capitalize">{session.type}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(parseISO(session.started_at), "h:mm a")}
+                        {session.ended_at ? ` - ${format(parseISO(session.ended_at), "h:mm a")}` : " - Active"}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant={session.ended_at ? "secondary" : "default"}>
+                    {session.ended_at ? "Completed" : "Active"}
+                  </Badge>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Today's Record */}
         {todayAttendance && (

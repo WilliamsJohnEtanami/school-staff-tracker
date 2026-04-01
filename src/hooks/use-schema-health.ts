@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isMissingPublicTableError } from "@/lib/supabase-errors";
 
 export const useSchemaHealth = () => {
   const [loading, setLoading] = useState(true);
@@ -20,10 +21,10 @@ export const useSchemaHealth = () => {
           .select("id")
           .limit(1);
 
-        if (notifError && (notifError.message.toLowerCase().includes("relation") || notifError.code === "42P01")) {
-          setError("Notifications table does not exist");
-        } else if (statusError && (statusError.message.toLowerCase().includes("relation") || statusError.code === "42P01")) {
-          setError("Notification statuses table does not exist");
+        if (notifError && isMissingPublicTableError(notifError, "notifications")) {
+          setError("Notifications table is missing from the schema cache");
+        } else if (statusError && isMissingPublicTableError(statusError, "notification_statuses")) {
+          setError("Notification statuses table is missing from the schema cache");
         } else {
           setError(null);
         }
