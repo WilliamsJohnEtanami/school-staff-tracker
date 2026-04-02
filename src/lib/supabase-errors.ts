@@ -79,23 +79,17 @@ export const getSettingsSystemErrorMessage = (error: SupabaseErrorLike) => {
   return error.message || "The settings system is currently unavailable.";
 };
 
-export const getFunctionErrorMessage = (error: any) => {
-  if (!error) return "Request failed.";
-
-  if (typeof error.message === "string" && error.message.trim()) {
-    if (normalize(error.message).includes("edge function")) {
-      return "The required Supabase edge function is not deployed or could not be reached. Deploy your edge functions and try again.";
-    }
-    return error.message;
-  }
-
-  const contextData = error.context?.data;
+const getFunctionContextErrorMessage = (error: any) => {
+  const contextData = error?.context?.data;
 
   if (typeof contextData === "string" && contextData.trim()) {
     try {
       const parsed = JSON.parse(contextData);
       if (typeof parsed?.error === "string" && parsed.error.trim()) {
         return parsed.error;
+      }
+      if (typeof parsed?.message === "string" && parsed.message.trim()) {
+        return parsed.message;
       }
     } catch {
       return contextData;
@@ -104,6 +98,40 @@ export const getFunctionErrorMessage = (error: any) => {
 
   if (typeof contextData?.error === "string" && contextData.error.trim()) {
     return contextData.error;
+  }
+
+  if (typeof contextData?.message === "string" && contextData.message.trim()) {
+    return contextData.message;
+  }
+
+  return null;
+};
+
+export const getFunctionErrorMessage = (error: any) => {
+  if (!error) return "Request failed.";
+
+  const contextMessage = getFunctionContextErrorMessage(error);
+  if (contextMessage) {
+    return contextMessage;
+  }
+
+  if (typeof error.message === "string" && error.message.trim()) {
+    const normalizedMessage = normalize(error.message);
+
+    if (
+      normalizedMessage.includes("failed to send a request to the edge function") ||
+      normalizedMessage.includes("failed to send request to the edge function") ||
+      normalizedMessage.includes("edge function could not be reached") ||
+      normalizedMessage.includes("fetch failed")
+    ) {
+      return "The required Supabase edge function is not deployed or could not be reached. Deploy your edge functions and try again.";
+    }
+
+    if (normalizedMessage.includes("edge function returned a non-2xx status code")) {
+      return "The server rejected the request.";
+    }
+
+    return error.message;
   }
 
   return "Request failed.";
