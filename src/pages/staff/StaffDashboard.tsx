@@ -418,25 +418,29 @@ const StaffDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-primary text-primary-foreground p-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold">Staff Dashboard</h1>
-          <p className="text-sm opacity-90">Welcome, {profile?.name || "Staff Member"}</p>
+      <header className="flex items-center justify-between gap-3 bg-primary p-4 text-primary-foreground">
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-lg font-bold">Staff Dashboard</h1>
+          <p className="truncate text-sm opacity-90">Welcome, {profile?.name || "Staff Member"}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Link
             to="/notifications?view=notifications"
-            className="inline-flex items-center gap-2 rounded-md bg-secondary px-3 py-1 text-sm text-secondary-foreground"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-secondary text-secondary-foreground sm:h-auto sm:w-auto sm:gap-2 sm:px-3 sm:py-1 sm:text-sm"
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
           >
             <Bell className="h-4 w-4" />
-            Notifications {unreadCount > 0 ? `(${unreadCount})` : ""}
+            <span className="hidden sm:inline">
+              Notifications {unreadCount > 0 ? `(${unreadCount})` : ""}
+            </span>
           </Link>
           <Link
             to="/notifications?view=requests"
-            className="inline-flex items-center gap-1 rounded-md border border-primary-foreground/30 px-2.5 py-1 text-xs text-primary-foreground sm:gap-2 sm:px-3 sm:text-sm"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-primary-foreground/30 text-primary-foreground sm:h-auto sm:w-auto sm:gap-2 sm:px-3 sm:py-1 sm:text-sm"
+            aria-label="Make Request"
           >
             <FilePlus2 className="h-4 w-4" />
-            Request
+            <span className="hidden sm:inline">Request</span>
           </Link>
           <Button variant="ghost" size="icon" onClick={signOut} className="text-primary-foreground hover:bg-primary/80">
             <LogOut className="h-5 w-5" />

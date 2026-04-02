@@ -139,55 +139,6 @@ const Login = () => {
     }
   };
 
-  const signInWithTestAdmin = async () => {
-    setEmail(TEST_ADMIN.email);
-    setPassword(TEST_ADMIN.password);
-    setLoading(true);
-
-    const { error } = await signIn(TEST_ADMIN.email, TEST_ADMIN.password);
-    setLoading(false);
-
-    if (!error) {
-      return;
-    }
-
-    setRecoveryLoading(true);
-
-    try {
-      const response = await supabase.functions.invoke("setup-admin", {
-        body: TEST_ADMIN,
-      });
-
-      if (response.error) {
-        const message = extractFunctionErrorMessage(response.error);
-        if (!message.includes("Admin account already exists")) {
-          throw new Error(message);
-        }
-      }
-
-      const { error: retryError } = await signIn(TEST_ADMIN.email, TEST_ADMIN.password);
-      if (retryError) {
-        throw retryError;
-      }
-
-      toast({
-        title: "Admin Test Login Ready",
-        description: "Signed in with the fixed admin account.",
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to sign in with the test admin account.";
-
-      toast({
-        title: "Admin Test Login Failed",
-        description: message,
-        variant: "destructive",
-      });
-    } finally {
-      setRecoveryLoading(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -231,14 +182,6 @@ const Login = () => {
               </Alert>
             ) : null}
 
-            <Alert>
-              <ShieldAlert className="h-4 w-4" />
-              <AlertDescription>
-                Test admin access is fixed to <strong>{TEST_ADMIN.email}</strong>. Use the button below to sign in to
-                admin quickly while you recreate staff on this new Supabase project.
-              </AlertDescription>
-            </Alert>
-
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -279,19 +222,6 @@ const Login = () => {
             <Button type="submit" className="w-full" disabled={loading || recoveryLoading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Sign In
-            </Button>
-
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full"
-              disabled={loading || recoveryLoading}
-              onClick={() => {
-                void signInWithTestAdmin();
-              }}
-            >
-              {(loading || recoveryLoading) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Use Test Admin Login
             </Button>
 
             {isAdminRecoveryEmail ? (
