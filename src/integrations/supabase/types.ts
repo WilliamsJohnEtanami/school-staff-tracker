@@ -367,6 +367,7 @@ export type Database = {
       }
       school_calendar: {
         Row: {
+          color: string | null
           created_at: string
           event_date: string
           event_name: string
@@ -375,6 +376,7 @@ export type Database = {
           type: string
         }
         Insert: {
+          color?: string | null
           created_at?: string
           event_date: string
           event_name: string
@@ -383,6 +385,7 @@ export type Database = {
           type: string
         }
         Update: {
+          color?: string | null
           created_at?: string
           event_date?: string
           event_name?: string
