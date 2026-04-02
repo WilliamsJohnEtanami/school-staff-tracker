@@ -25,6 +25,7 @@ import StaffProfile from "@/pages/admin/StaffProfile";
 import AdminSetup from "@/pages/AdminSetup";
 import NotificationsPage from "@/pages/NotificationsPage";
 import NotFound from "@/pages/NotFound";
+import SeoController from "@/components/SeoController";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <SeoController />
         <AuthProvider>
           <LocationProvider>
             <Routes>
