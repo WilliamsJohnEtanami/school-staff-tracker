@@ -381,6 +381,16 @@ const Analytics = () => {
     [liveStats]
   );
 
+  const liveStatsChartData = useMemo(
+    () => liveStatsData.filter((stat) => stat.value > 0),
+    [liveStatsData]
+  );
+
+  const totalLiveStaff = useMemo(
+    () => liveStatsData.reduce((sum, stat) => sum + stat.value, 0),
+    [liveStatsData]
+  );
+
   const hasAttendanceMetrics = attendanceData.some(
     (entry) => entry.attendanceRate > 0 || entry.onTimeCount > 0 || entry.lateCount > 0 || entry.averageHours > 0
   );
@@ -418,24 +428,57 @@ const Analytics = () => {
           <CardTitle>Current Staff Status</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={liveStatsData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, value }) => `${name}: ${value}`}
-                outerRadius={80}
-                dataKey="value"
-              >
-                {liveStatsData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          {totalLiveStaff > 0 ? (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,320px)_1fr] lg:items-center">
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie
+                    data={liveStatsChartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={42}
+                    outerRadius={88}
+                    paddingAngle={2}
+                    labelLine={false}
+                    label={false}
+                    dataKey="value"
+                  >
+                    {liveStatsChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value, name) => [`${value}`, name]} />
+                </PieChart>
+              </ResponsiveContainer>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {liveStatsData.map((stat) => {
+                  const percent = totalLiveStaff > 0 ? Math.round((stat.value / totalLiveStaff) * 100) : 0;
+
+                  return (
+                    <div key={stat.name} className="rounded-2xl border bg-background p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="h-3 w-3 shrink-0 rounded-full"
+                            style={{ backgroundColor: stat.color }}
+                            aria-hidden="true"
+                          />
+                          <span className="truncate text-sm font-medium">{stat.name}</span>
+                        </div>
+                        <Badge variant="secondary">{stat.value}</Badge>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {stat.value === 0 ? "No staff in this group right now." : `${percent}% of current staff status records.`}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No current staff status data is available yet.</p>
+          )}
         </CardContent>
       </Card>
 

@@ -8,8 +8,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, UserCog } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { getFunctionErrorMessage } from "@/lib/supabase-errors";
 
 const StaffManagement = () => {
@@ -20,6 +29,9 @@ const StaffManagement = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [adding, setAdding] = useState(false);
+  const [staffToDelete, setStaffToDelete] = useState<any | null>(null);
+  const [deleteConfirmationName, setDeleteConfirmationName] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
 
   const fetchStaff = async () => {
@@ -62,6 +74,42 @@ const StaffManagement = () => {
     } else {
       fetchStaff();
     }
+  };
+
+  const closeDeleteDialog = () => {
+    if (deleting) return;
+    setStaffToDelete(null);
+    setDeleteConfirmationName("");
+  };
+
+  const normalizedDeleteName = deleteConfirmationName.trim().replace(/\s+/g, " ").toLowerCase();
+  const normalizedTargetName = staffToDelete?.name?.trim().replace(/\s+/g, " ").toLowerCase() ?? "";
+  const canDeleteStaff = !!staffToDelete && normalizedDeleteName.length > 0 && normalizedDeleteName === normalizedTargetName;
+
+  const handleDeleteStaff = async () => {
+    if (!staffToDelete || !canDeleteStaff) {
+      return;
+    }
+
+    setDeleting(true);
+    const res = await supabase.functions.invoke("manage-staff", {
+      body: {
+        action: "delete",
+        userId: staffToDelete.user_id,
+        confirmName: deleteConfirmationName,
+      },
+    });
+
+    setDeleting(false);
+
+    if (res.error) {
+      toast({ title: "Delete failed", description: getFunctionErrorMessage(res.error), variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Staff Deleted", description: `${staffToDelete.name} has been deleted permanently.` });
+    closeDeleteDialog();
+    fetchStaff();
   };
 
   return (
@@ -116,9 +164,22 @@ const StaffManagement = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Button variant="outline" size="sm" onClick={() => toggleStatus(s)}>
-                          {s.status === "active" ? "Deactivate" : "Activate"}
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" size="sm" onClick={() => toggleStatus(s)}>
+                            {s.status === "active" ? "Deactivate" : "Activate"}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              setStaffToDelete(s);
+                              setDeleteConfirmationName("");
+                            }}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -128,6 +189,45 @@ const StaffManagement = () => {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!staffToDelete} onOpenChange={(open) => { if (!open) closeDeleteDialog(); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Staff Profile</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  This will permanently delete the staff account, profile, attendance-linked records, and access to the app.
+                </p>
+                {staffToDelete ? (
+                  <p>
+                    To confirm, type the full name exactly as shown: <span className="font-semibold text-foreground">{staffToDelete.name}</span>
+                  </p>
+                ) : null}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="delete-staff-name">Staff Full Name</Label>
+            <Input
+              id="delete-staff-name"
+              value={deleteConfirmationName}
+              onChange={(event) => setDeleteConfirmationName(event.target.value)}
+              placeholder={staffToDelete?.name ?? "Enter staff full name"}
+              autoComplete="off"
+            />
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <Button variant="destructive" onClick={handleDeleteStaff} disabled={!canDeleteStaff || deleting}>
+              {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Delete Staff
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
