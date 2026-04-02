@@ -12,6 +12,8 @@ const jsonResponse = (body: unknown, status = 200) =>
   });
 
 const normalizeEmail = (email: string | null | undefined) => (email ?? "").trim().toLowerCase();
+const normalizeName = (name: string | null | undefined) =>
+  (name ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
 const splitName = (name: string) => {
   const trimmed = name.trim();
@@ -161,6 +163,68 @@ const ensureStaffRecords = async (
   }
 };
 
+const deleteStaffAccount = async (
+  supabaseAdmin: ReturnType<typeof createClient>,
+  userId: string,
+  confirmName: string
+) => {
+  if (!userId || !confirmName.trim()) {
+    throw new Error("Staff account and confirmation name are required.");
+  }
+
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from("profiles")
+    .select("user_id, name, email")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (profileError) {
+    throw new Error(`Unable to load staff profile: ${profileError.message}`);
+  }
+
+  if (!profile) {
+    throw new Error("Staff profile not found.");
+  }
+
+  if (normalizeName(profile.name) !== normalizeName(confirmName)) {
+    throw new Error("Confirmation name does not match the selected staff member.");
+  }
+
+  const { data: staffRole, error: staffRoleError } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "staff")
+    .maybeSingle();
+
+  if (staffRoleError) {
+    throw new Error(`Unable to verify staff role: ${staffRoleError.message}`);
+  }
+
+  if (!staffRole) {
+    throw new Error("Only staff accounts can be deleted here.");
+  }
+
+  const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+
+  if (deleteAuthError) {
+    throw new Error(`Failed to delete staff account: ${deleteAuthError.message}`);
+  }
+
+  const normalizedEmail = normalizeEmail(profile.email);
+
+  if (normalizedEmail) {
+    const { error: legacyStaffDeleteError } = await supabaseAdmin
+      .from("staff")
+      .delete()
+      .eq("email", normalizedEmail);
+
+    if (legacyStaffDeleteError) {
+      console.warn("Legacy staff cleanup failed after auth delete:", legacyStaffDeleteError);
+    }
+  }
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -174,74 +238,84 @@ Deno.serve(async (req) => {
     const supabaseAdmin = getSupabaseAdmin();
     await requireAdmin(req, supabaseAdmin);
 
-    const { action, name, email, password } = await req.json();
+    const { action, name, email, password, userId, confirmName } = await req.json();
     const normalizedEmail = normalizeEmail(email);
     const trimmedName = typeof name === "string" ? name.trim() : "";
     const plainPassword = typeof password === "string" ? password : "";
 
-    if (action !== "create") {
-      throw new Error("Unknown action");
-    }
-
-    if (!trimmedName || !normalizedEmail || !plainPassword) {
-      throw new Error("Name, email, and password are required.");
-    }
-
-    if (plainPassword.length < 6) {
-      throw new Error("Password must be at least 6 characters long.");
-    }
-
-    const existingAuthUser = await findAuthUserByEmail(supabaseAdmin, normalizedEmail);
-    let userId: string;
-    let recovered = false;
-
-    if (existingAuthUser) {
-      const { data: existingAdminRole } = await supabaseAdmin
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", existingAuthUser.id)
-        .eq("role", "admin")
-        .maybeSingle();
-
-      if (existingAdminRole) {
-        throw new Error("That email address already belongs to an admin account.");
+    if (action === "create") {
+      if (!trimmedName || !normalizedEmail || !plainPassword) {
+        throw new Error("Name, email, and password are required.");
       }
 
-      recovered = true;
+      if (plainPassword.length < 6) {
+        throw new Error("Password must be at least 6 characters long.");
+      }
 
-      const { data: updatedUser, error: updateError } =
-        await supabaseAdmin.auth.admin.updateUserById(existingAuthUser.id, {
+      const existingAuthUser = await findAuthUserByEmail(supabaseAdmin, normalizedEmail);
+      let resolvedUserId: string;
+      let recovered = false;
+
+      if (existingAuthUser) {
+        const { data: existingAdminRole } = await supabaseAdmin
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", existingAuthUser.id)
+          .eq("role", "admin")
+          .maybeSingle();
+
+        if (existingAdminRole) {
+          throw new Error("That email address already belongs to an admin account.");
+        }
+
+        recovered = true;
+
+        const { data: updatedUser, error: updateError } =
+          await supabaseAdmin.auth.admin.updateUserById(existingAuthUser.id, {
+            password: plainPassword,
+            email_confirm: true,
+            user_metadata: {
+              ...(existingAuthUser.user_metadata ?? {}),
+              name: trimmedName,
+            },
+          });
+
+        if (updateError) {
+          throw new Error(`Failed to repair existing staff account: ${updateError.message}`);
+        }
+
+        resolvedUserId = updatedUser.user?.id ?? existingAuthUser.id;
+      } else {
+        const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+          email: normalizedEmail,
           password: plainPassword,
           email_confirm: true,
-          user_metadata: {
-            ...(existingAuthUser.user_metadata ?? {}),
-            name: trimmedName,
-          },
+          user_metadata: { name: trimmedName },
         });
 
-      if (updateError) {
-        throw new Error(`Failed to repair existing staff account: ${updateError.message}`);
+        if (createError) {
+          throw new Error(createError.message);
+        }
+
+        resolvedUserId = newUser.user.id;
       }
 
-      userId = updatedUser.user?.id ?? existingAuthUser.id;
-    } else {
-      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email: normalizedEmail,
-        password: plainPassword,
-        email_confirm: true,
-        user_metadata: { name: trimmedName },
-      });
+      await ensureStaffRecords(supabaseAdmin, resolvedUserId, trimmedName, normalizedEmail);
 
-      if (createError) {
-        throw new Error(createError.message);
-      }
-
-      userId = newUser.user.id;
+      return jsonResponse({ success: true, recovered, user_id: resolvedUserId });
     }
 
-    await ensureStaffRecords(supabaseAdmin, userId, trimmedName, normalizedEmail);
+    if (action === "delete") {
+      await deleteStaffAccount(
+        supabaseAdmin,
+        typeof userId === "string" ? userId : "",
+        typeof confirmName === "string" ? confirmName : ""
+      );
 
-    return jsonResponse({ success: true, recovered, user_id: userId });
+      return jsonResponse({ success: true, deleted: true, user_id: userId });
+    }
+
+    throw new Error("Unknown action");
   } catch (error: any) {
     console.error("Manage staff error:", error);
     return jsonResponse({ error: error.message || "Failed to manage staff" }, 400);
