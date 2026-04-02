@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import NotificationsPanel from "@/components/NotificationsPanel";
+import FeedbackCenter from "@/components/FeedbackCenter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,8 @@ const PAGE_SIZE = 25;
 type SortKey = "timestamp" | "staff_name" | "status";
 type SortDir = "asc" | "desc";
 type DashboardStatusFilter = "all" | "clocked_in" | "present" | "late" | "break" | "absent" | "on_leave" | "anomalies";
+type StaffOverviewFilter = "all" | "clocked_in" | "late" | "absent" | "on_leave";
+type StaffOverviewStatus = Exclude<StaffOverviewFilter, "all">;
 
 const CLOCKED_IN_STATUSES = new Set(["present", "late"]);
 
@@ -35,10 +37,12 @@ const AdminDashboard = () => {
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [approvedLeaveToday, setApprovedLeaveToday] = useState(0);
+  const [approvedLeaveTodayRecords, setApprovedLeaveTodayRecords] = useState<any[]>([]);
   const [dateFrom, setDateFrom] = useState(format(new Date(), "yyyy-MM-dd"));
   const [dateTo, setDateTo] = useState(format(new Date(), "yyyy-MM-dd"));
   const [searchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<DashboardStatusFilter>("all");
+  const [staffOverviewFilter, setStaffOverviewFilter] = useState<StaffOverviewFilter>("all");
   const [deviceFilter, setDeviceFilter] = useState("all");
   const [complianceFilter, setComplianceFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -107,6 +111,7 @@ const AdminDashboard = () => {
       setStaffCount(activeStaff.length);
       setSettings(settRes.data);
       setApprovedLeaveToday(approvedLeaveData.length);
+      setApprovedLeaveTodayRecords(approvedLeaveData);
       setWorkSessions(workSessionData);
       setLeaveRequests(leaveRequestData);
 
@@ -199,11 +204,16 @@ const AdminDashboard = () => {
     const statusParam = searchParams.get('status');
     if (statusParam === 'clocked_in' || statusParam === 'present' || statusParam === 'late' || statusParam === 'break' || statusParam === 'absent') {
       setStatusFilter(statusParam);
+      setStaffOverviewFilter(statusParam === "late" ? "late" : statusParam === "absent" ? "absent" : "clocked_in");
     } else if (statusParam === 'on_leave') {
       setStatusFilter('all');
       setComplianceFilter('all');
+      setStaffOverviewFilter("on_leave");
     } else if (statusParam === 'anomalies') {
       setComplianceFilter('outside');
+      setStaffOverviewFilter("all");
+    } else {
+      setStaffOverviewFilter("all");
     }
 
     fetchData();
@@ -322,16 +332,121 @@ const AdminDashboard = () => {
   const onLeaveToday = approvedLeaveToday;
   const absentCount = Math.max(0, staffCount - clockedInStaff.size - onLeaveToday);
 
+  const latestTodayRecordByUser = useMemo(() => {
+    const lookup = new Map<string, any>();
+
+    todayRecords.forEach((record) => {
+      const existing = lookup.get(record.user_id);
+
+      if (
+        !existing ||
+        new Date(record.timestamp || record.created_at).getTime() >
+          new Date(existing.timestamp || existing.created_at).getTime()
+      ) {
+        lookup.set(record.user_id, record);
+      }
+    });
+
+    return lookup;
+  }, [todayRecords]);
+
+  const activeSessionByUser = useMemo(() => {
+    const todayKey = format(new Date(), "yyyy-MM-dd");
+    const lookup = new Map<string, any>();
+
+    workSessions
+      .filter((session) => session.session_date === todayKey && !session.ended_at)
+      .forEach((session) => {
+        const existing = lookup.get(session.user_id);
+
+        if (!existing || new Date(session.started_at).getTime() > new Date(existing.started_at).getTime()) {
+          lookup.set(session.user_id, session);
+        }
+      });
+
+    return lookup;
+  }, [workSessions]);
+
+  const approvedLeaveUserIds = useMemo(
+    () => new Set((approvedLeaveTodayRecords ?? []).map((record: any) => record.user_id)),
+    [approvedLeaveTodayRecords]
+  );
+
+  const staffOverviewRows = useMemo(() => {
+    return staffList
+      .map((staff: any) => {
+        const latestRecord = latestTodayRecordByUser.get(staff.user_id);
+        const activeSession = activeSessionByUser.get(staff.user_id);
+        const onLeave = approvedLeaveUserIds.has(staff.user_id);
+
+        let status: StaffOverviewStatus = "absent";
+
+        if (onLeave) {
+          status = "on_leave";
+        } else if (latestRecord?.status === "late") {
+          status = "late";
+        } else if (latestRecord && CLOCKED_IN_STATUSES.has(latestRecord.status)) {
+          status = "clocked_in";
+        }
+
+        const activeSessionLabel =
+          activeSession?.type === "break"
+            ? "On break"
+            : activeSession?.type === "off-site"
+              ? "Off-site"
+              : activeSession?.type === "work"
+                ? "Working"
+                : latestRecord?.clock_out
+                  ? "Clocked out"
+                  : status === "on_leave"
+                    ? "Approved leave"
+                    : "No active session";
+
+        const detail =
+          status === "on_leave"
+            ? "Approved leave for today."
+            : status === "absent"
+              ? "No attendance record for today."
+              : latestRecord?.status === "late"
+                ? "Clocked in after the late cutoff."
+                : "Attendance recorded for today.";
+
+        return {
+          profileId: staff.id,
+          userId: staff.user_id,
+          name: staff.name,
+          status,
+          clockInAt: latestRecord?.timestamp ?? null,
+          activeSessionLabel,
+          detail,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeSessionByUser, approvedLeaveUserIds, latestTodayRecordByUser, staffList]);
+
+  const filteredStaffOverviewRows = useMemo(() => {
+    return staffOverviewRows.filter((row) => {
+      if (staffOverviewFilter === "all") {
+        return true;
+      }
+
+      if (staffOverviewFilter === "clocked_in") {
+        return row.status === "clocked_in" || row.status === "late";
+      }
+
+      return row.status === staffOverviewFilter;
+    });
+  }, [staffOverviewFilter, staffOverviewRows]);
+
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("desc"); }
   };
 
-  const handleStatsClick = (statusValue: string) => {
-    setStatusFilter(statusValue as any);
-    // Scroll to table
+  const handleStatsClick = (overviewFilter: StaffOverviewFilter) => {
+    setStaffOverviewFilter(overviewFilter);
     setTimeout(() => {
-      document.querySelector('[data-table-section]')?.scrollIntoView({ behavior: 'smooth' });
+      document.querySelector('[data-staff-status-section]')?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
   };
 
@@ -413,10 +528,10 @@ const AdminDashboard = () => {
   };
 
   const cards = [
-    { label: "Total Staff", value: staffCount, icon: Users, color: "text-primary", clickable: false },
-    { label: "Clocked In Today", value: clockedInTodayCount, icon: UserCheck, color: "text-accent", clickable: true, filter: "clocked_in" },
-    { label: "Absent Today", value: absentCount, icon: UserX, color: "text-destructive", clickable: true, filter: "absent" },
-    { label: "Late Today", value: lateCount, icon: Clock, color: "text-warning", clickable: true, filter: "late" },
+    { label: "Total Staff", value: staffCount, icon: Users, color: "text-primary", detailFilter: "all" as StaffOverviewFilter, hint: "View staff list" },
+    { label: "Clocked In Today", value: clockedInTodayCount, icon: UserCheck, color: "text-accent", detailFilter: "clocked_in" as StaffOverviewFilter, hint: "View details" },
+    { label: "Absent Today", value: absentCount, icon: UserX, color: "text-destructive", detailFilter: "absent" as StaffOverviewFilter, hint: "View details" },
+    { label: "Late Today", value: lateCount, icon: Clock, color: "text-warning", detailFilter: "late" as StaffOverviewFilter, hint: "View details" },
   ];
 
   const SortableHead = ({ label, field }: { label: string; field: SortKey }) => (
@@ -453,36 +568,16 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        {[
-          { value: 'all', label: 'All' },
-          { value: 'clocked_in', label: 'Clocked In' },
-          { value: 'late', label: 'Late' },
-          { value: 'break', label: 'Break' },
-          { value: 'absent', label: 'Absent' },
-          { value: 'on_leave', label: 'On Leave' },
-          { value: 'anomalies', label: 'Anomalies' },
-        ].map((option) => (
-          <button
-            key={option.value}
-            onClick={() => setStatusFilter(option.value as any)}
-            className={`rounded-full px-3 py-1 text-xs border transition ${statusFilter === option.value ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent border-border text-foreground hover:bg-primary/10'}`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-
       {/* Overview Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {cards.map(c => (
-          <Card key={c.label} className={c.clickable ? "cursor-pointer transition-all hover:shadow-lg hover:border-primary" : ""}>
+          <Card key={c.label} className="cursor-pointer transition-all hover:shadow-lg hover:border-primary">
             <CardContent 
               className="pt-6 flex items-center gap-4"
-              onClick={() => c.clickable && handleStatsClick((c as any).filter)}
-              role={c.clickable ? "button" : undefined}
-              tabIndex={c.clickable ? 0 : undefined}
-              onKeyDown={(e) => c.clickable && e.key === 'Enter' && handleStatsClick((c as any).filter)}
+              onClick={() => handleStatsClick(c.detailFilter)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && handleStatsClick(c.detailFilter)}
             >
               <div className={`p-3 rounded-full bg-muted ${c.color}`}>
                 <c.icon className="h-6 w-6" />
@@ -490,18 +585,108 @@ const AdminDashboard = () => {
               <div className="flex-1">
                 <p className="text-2xl font-bold text-foreground">{c.value}</p>
                 <p className="text-xs text-muted-foreground">{c.label}</p>
-                {c.clickable && <p className="text-xs text-primary font-medium mt-1">Click to filter</p>}
+                <p className="text-xs text-primary font-medium mt-1">{c.hint}</p>
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-xl font-semibold">Quick Actions</h3>
-        <Link to="/notifications" className="text-sm text-primary hover:underline">Go to Notifications</Link>
-      </div>
-      <NotificationsPanel enableBroadcast={true} />
+      <Card data-staff-status-section="true">
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <CardTitle>Today's Staff Status</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Open the real staff list behind each summary card and jump straight to the people in that group.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: "all", label: "All Staff" },
+                { value: "clocked_in", label: "Clocked In" },
+                { value: "late", label: "Late" },
+                { value: "absent", label: "Absent" },
+                { value: "on_leave", label: "On Leave" },
+              ].map((option) => (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={staffOverviewFilter === option.value ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStaffOverviewFilter(option.value as StaffOverviewFilter)}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          {filteredStaffOverviewRows.length === 0 ? (
+            <p className="rounded-2xl border border-dashed py-10 text-center text-sm text-muted-foreground">
+              No staff records match this view yet.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Staff</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Clock In</TableHead>
+                    <TableHead>Current Session</TableHead>
+                    <TableHead>Notes</TableHead>
+                    <TableHead className="text-right">Profile</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredStaffOverviewRows.map((row) => (
+                    <TableRow key={row.userId}>
+                      <TableCell className="font-medium">{row.name}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            row.status === "late" || row.status === "absent"
+                              ? "destructive"
+                              : row.status === "on_leave"
+                                ? "secondary"
+                                : "default"
+                          }
+                          className={row.status === "clocked_in" ? "bg-accent text-accent-foreground" : ""}
+                        >
+                          {row.status === "clocked_in"
+                            ? "Clocked In"
+                            : row.status === "on_leave"
+                              ? "On Leave"
+                              : row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {row.clockInAt ? format(new Date(row.clockInAt), "h:mm a") : "—"}
+                      </TableCell>
+                      <TableCell>{row.activeSessionLabel}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{row.detail}</TableCell>
+                      <TableCell className="text-right">
+                        <Link
+                          to={`/admin/staff/${row.profileId}`}
+                          className="text-sm font-medium text-primary hover:underline"
+                        >
+                          Open Profile
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <FeedbackCenter mode="admin" />
 
       {/* Reminder Actions */}
       <Card>

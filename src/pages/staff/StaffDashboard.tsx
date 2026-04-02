@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2, MapPin, LogOut, Loader2, XCircle, LogIn, History, ChevronDown, CalendarOff, Coffee, Briefcase, Play, Pause, Power, AlertCircle, Bell, FilePlus2 } from "lucide-react";
+import { CheckCircle2, MapPin, LogOut, Loader2, XCircle, LogIn, History, ChevronDown, CalendarOff, Coffee, Briefcase, Play, Pause, Power, AlertCircle, Bell, FilePlus2, MessageSquareText } from "lucide-react";
 import { format, differenceInMinutes, parseISO } from "date-fns";
 import { useNotifications } from "@/hooks/use-notifications";
 import { getDeviceInfo } from "@/lib/device-info";
@@ -423,7 +423,7 @@ const StaffDashboard = () => {
           <h1 className="truncate text-lg font-bold">Staff Dashboard</h1>
           <p className="truncate text-sm opacity-90">Welcome, {profile?.name || "Staff Member"}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <Link
             to="/notifications?view=notifications"
             className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-secondary text-secondary-foreground sm:h-auto sm:w-auto sm:gap-2 sm:px-3 sm:py-1 sm:text-sm"
@@ -441,6 +441,14 @@ const StaffDashboard = () => {
           >
             <FilePlus2 className="h-4 w-4" />
             <span className="hidden sm:inline">Request</span>
+          </Link>
+          <Link
+            to="/notifications?view=feedback"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-primary-foreground/30 text-primary-foreground sm:h-auto sm:w-auto sm:gap-2 sm:px-3 sm:py-1 sm:text-sm"
+            aria-label="Feedback"
+          >
+            <MessageSquareText className="h-4 w-4" />
+            <span className="hidden sm:inline">Feedback</span>
           </Link>
           <Button variant="ghost" size="icon" onClick={signOut} className="text-primary-foreground hover:bg-primary/80">
             <LogOut className="h-5 w-5" />
@@ -605,7 +613,7 @@ const StaffDashboard = () => {
               ))
             )}
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <Link
                 to="/notifications?view=notifications"
                 className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
@@ -617,6 +625,12 @@ const StaffDashboard = () => {
                 className="inline-flex items-center justify-center rounded-md border border-input px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
               >
                 Make Request
+              </Link>
+              <Link
+                to="/notifications?view=feedback"
+                className="inline-flex items-center justify-center rounded-md border border-input px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                Send Feedback
               </Link>
             </div>
           </CardContent>
