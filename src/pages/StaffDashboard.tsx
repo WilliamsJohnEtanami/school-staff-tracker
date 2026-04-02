@@ -12,6 +12,7 @@ import { format, differenceInMinutes, parseISO } from "date-fns";
 import { useNotifications } from "@/hooks/use-notifications";
 import { getDeviceInfo } from "@/lib/device-info";
 import { getDistanceInMeters } from "@/lib/geo";
+import { getFunctionErrorMessage } from "@/lib/supabase-errors";
 
 type SessionType = "work" | "break" | "off-site";
 type SessionState = "NOT_CLOCKED_IN" | "IN_WORK" | "IN_BREAK" | "IN_OFFSITE" | "CLOCKED_OUT";
@@ -190,7 +191,7 @@ const StaffDashboard = () => {
   }, [fetchSettingsAndDistance]);
 
   const handleClockIn = async () => {
-    if (!user?.id || latitude === undefined || longitude === undefined) {
+    if (!user?.id || typeof latitude !== "number" || typeof longitude !== "number") {
       toast({ title: "Error", description: "Location not available. Please enable location services.", variant: "destructive" });
       return;
     }
@@ -198,52 +199,48 @@ const StaffDashboard = () => {
     setIsLoading(true);
     try {
       const deviceInfo = getDeviceInfo();
-      const token = (await supabase.auth.getSession()).data.session?.access_token;
-
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/clock-in`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const { data: result, error } = await supabase.functions.invoke("clock-in", {
+        body: {
           latitude,
           longitude,
           device_info: deviceInfo.device_type,
           browser: deviceInfo.browser,
           operating_system: deviceInfo.operating_system,
           device_type: deviceInfo.device_type,
-        }),
+        },
       });
 
-      const result = await response.json();
-      if (response.ok) {
-        const nowIso = new Date().toISOString();
-        const sessionDate = nowIso.split("T")[0];
-
-        const { error: sessionError } = await supabase.from("work_sessions").insert({
-          user_id: user.id,
-          session_date: sessionDate,
-          type: "work",
-          started_at: nowIso,
-        });
-
-        if (sessionError) {
-          console.warn("Work session creation error:", sessionError);
-          toast({
-            title: "Clocked In",
-            description: `Attendance was recorded, but the live activity session could not be created: ${sessionError.message}`,
-            variant: "destructive",
-          });
-        } else {
-          toast({ title: "Success", description: `Clocked in successfully. Status: ${result.status}`, variant: "default" });
-        }
-
-        setSessionState("IN_WORK");
-        await Promise.all([fetchTodayAttendance(), fetchTodaySessions()]);
-      } else {
-        toast({ title: "Error", description: result.error || "Failed to clock in", variant: "destructive" });
+      if (error) {
+        throw new Error(getFunctionErrorMessage(error));
       }
+
+      if (!result?.success) {
+        throw new Error(result?.error || "Failed to clock in.");
+      }
+
+      const nowIso = new Date().toISOString();
+      const sessionDate = nowIso.split("T")[0];
+
+      const { error: sessionError } = await supabase.from("work_sessions").insert({
+        user_id: user.id,
+        session_date: sessionDate,
+        type: "work",
+        started_at: nowIso,
+      });
+
+      if (sessionError) {
+        console.warn("Work session creation error:", sessionError);
+        toast({
+          title: "Clocked In",
+          description: `Attendance was recorded, but the live activity session could not be created: ${sessionError.message}`,
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Success", description: `Clocked in successfully. Status: ${result.status}`, variant: "default" });
+      }
+
+      setSessionState("IN_WORK");
+      await Promise.all([fetchTodayAttendance(), fetchTodaySessions()]);
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Clock in failed", variant: "destructive" });
     } finally {
