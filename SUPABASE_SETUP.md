@@ -148,7 +148,8 @@ npx supabase functions deploy clock-in --no-verify-jwt
 npx supabase functions deploy daily-alert
 
 # Deploy the manage-staff function (if not already deployed):
-npx supabase functions deploy manage-staff
+# Keep gateway JWT verification disabled because the function validates the bearer token internally.
+npx supabase functions deploy manage-staff --no-verify-jwt
 
 
 ---
