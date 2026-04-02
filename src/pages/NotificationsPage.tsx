@@ -9,11 +9,12 @@ import {
   History,
   Loader2,
   Menu,
+  MessageSquareText,
   Send,
   type LucideIcon,
 } from "lucide-react";
 import AdminLeaveRequestsPanel from "@/components/AdminLeaveRequestsPanel";
-import NotificationsPanel from "@/components/NotificationsPanel";
+import FeedbackCenter from "@/components/FeedbackCenter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,11 +34,16 @@ import { useToast } from "@/hooks/use-toast";
 import { useNotifications } from "@/hooks/use-notifications";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
+import {
+  getFunctionErrorMessage,
+  getNotificationSystemErrorMessage,
+  isMissingPublicTableError,
+} from "@/lib/supabase-errors";
 import { cn } from "@/lib/utils";
 
 type LeaveRequest = Tables<"leave_requests">;
-type StaffSection = "notifications" | "requests" | "history";
-type AdminSection = "broadcast" | "notifications" | "requests";
+type StaffSection = "notifications" | "feedback" | "requests" | "history";
+type AdminSection = "broadcast" | "notifications" | "requests" | "feedback";
 type SectionKey = StaffSection | AdminSection;
 
 type SectionOption = {
@@ -53,6 +59,12 @@ const STAFF_SECTIONS: SectionOption[] = [
     label: "Notifications",
     description: "Open messages and review updates.",
     icon: Bell,
+  },
+  {
+    value: "feedback",
+    label: "Feedback",
+    description: "Send complaints, suggestions, or questions to admin.",
+    icon: MessageSquareText,
   },
   {
     value: "requests",
@@ -86,6 +98,12 @@ const ADMIN_SECTIONS: SectionOption[] = [
     label: "Staff Requests",
     description: "Approve or reject leave requests.",
     icon: Calendar,
+  },
+  {
+    value: "feedback",
+    label: "Feedback",
+    description: "Reply directly to staff feedback threads.",
+    icon: MessageSquareText,
   },
 ];
 
@@ -142,8 +160,8 @@ const NotificationsPage = () => {
           <h1 className="text-2xl font-bold">{isAdmin ? "Admin Notifications" : "Notifications"}</h1>
           <p className="text-sm text-muted-foreground">
             {isAdmin
-              ? "Manage school-wide broadcasts and staff leave requests."
-              : "Read updates, submit requests, and keep track of your leave history."}
+              ? "Manage broadcasts, leave requests, and direct staff feedback conversations."
+              : "Read updates, send feedback, submit requests, and keep track of your leave history."}
           </p>
         </div>
 
@@ -224,22 +242,37 @@ const NotificationsPage = () => {
 
       {isAdmin ? (
         <>
-          {activeSection === "broadcast" ? <NotificationsPanel enableBroadcast /> : null}
-          {activeSection === "notifications" ? <NotificationsPanel /> : null}
+          {activeSection === "broadcast" ? <BroadcastComposer /> : null}
+          {activeSection === "notifications" ? (
+            <NotificationInbox
+              title="Admin Inbox"
+              emptyMessage="No notifications have been sent yet."
+              selectedNotificationId={selectedNotificationId}
+              onSelectNotification={selectNotification}
+            />
+          ) : null}
           {activeSection === "requests" ? <AdminLeaveRequestsPanel /> : null}
+          {activeSection === "feedback" ? <FeedbackCenter mode="admin" /> : null}
         </>
       ) : (
         <>
           {activeSection === "notifications" ? (
-            <StaffNotificationInbox
+            <NotificationInbox
+              title="Inbox"
+              emptyMessage="No notifications yet."
               selectedNotificationId={selectedNotificationId}
               onSelectNotification={selectNotification}
-              onMakeRequest={() => setView("requests")}
+              actionLabel="Make Request"
+              onAction={() => setView("requests")}
             />
           ) : null}
 
           {activeSection === "requests" ? (
             <StaffLeaveRequestForm onSubmitted={() => setView("history")} />
+          ) : null}
+
+          {activeSection === "feedback" ? (
+            <FeedbackCenter mode="staff" />
           ) : null}
 
           {activeSection === "history" ? (
@@ -251,14 +284,20 @@ const NotificationsPage = () => {
   );
 };
 
-const StaffNotificationInbox = ({
+const NotificationInbox = ({
+  title,
+  emptyMessage,
   selectedNotificationId,
   onSelectNotification,
-  onMakeRequest,
+  actionLabel,
+  onAction,
 }: {
+  title: string;
+  emptyMessage: string;
   selectedNotificationId: string | null;
   onSelectNotification: (notificationId: string | null) => void;
-  onMakeRequest: () => void;
+  actionLabel?: string;
+  onAction?: () => void;
 }) => {
   const { notifications, unreadCount, loading, error, markAllAsRead, markAsRead } = useNotifications();
 
@@ -288,10 +327,12 @@ const StaffNotificationInbox = ({
               Back
             </Button>
 
-            <Button variant="outline" size="sm" onClick={onMakeRequest}>
-              <FilePlus2 className="mr-2 h-4 w-4" />
-              Make Request
-            </Button>
+            {onAction && actionLabel ? (
+              <Button variant="outline" size="sm" onClick={onAction}>
+                <FilePlus2 className="mr-2 h-4 w-4" />
+                {actionLabel}
+              </Button>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -321,7 +362,7 @@ const StaffNotificationInbox = ({
       <CardHeader className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle>Inbox</CardTitle>
+            <CardTitle>{title}</CardTitle>
             <CardDescription>
               {unreadCount > 0
                 ? `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"} waiting for you.`
@@ -333,10 +374,12 @@ const StaffNotificationInbox = ({
             <Button variant="outline" size="sm" onClick={() => void markAllAsRead()} disabled={!unreadCount || loading}>
               Mark all read
             </Button>
-            <Button variant="outline" size="sm" onClick={onMakeRequest}>
-              <FilePlus2 className="mr-2 h-4 w-4" />
-              Make Request
-            </Button>
+            {onAction && actionLabel ? (
+              <Button variant="outline" size="sm" onClick={onAction}>
+                <FilePlus2 className="mr-2 h-4 w-4" />
+                {actionLabel}
+              </Button>
+            ) : null}
           </div>
         </div>
       </CardHeader>
@@ -350,7 +393,7 @@ const StaffNotificationInbox = ({
           <p className="text-sm text-destructive">{error}</p>
         ) : notifications.length === 0 ? (
           <div className="rounded-2xl border border-dashed p-8 text-center">
-            <p className="text-sm text-muted-foreground">No notifications yet.</p>
+            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -395,6 +438,126 @@ const StaffNotificationInbox = ({
             ))}
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+};
+
+const BroadcastComposer = () => {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [title, setTitle] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [schemaError, setSchemaError] = useState<string | null>(null);
+
+  const sendBroadcast = async () => {
+    if (!user?.id) {
+      toast({ title: "Error", description: "You must be signed in to broadcast.", variant: "destructive" });
+      return;
+    }
+
+    if (!title.trim() || !message.trim()) {
+      toast({ title: "Validation", description: "Title and message are required.", variant: "destructive" });
+      return;
+    }
+
+    setSending(true);
+    setSchemaError(null);
+
+    const { data, error } = await supabase.functions.invoke("broadcast-notification", {
+      body: {
+        title: title.trim(),
+        message: message.trim(),
+      },
+    });
+
+    if (error) {
+      const errorMessage = getFunctionErrorMessage(error);
+      const lowerMessage = errorMessage.toLowerCase();
+
+      if (lowerMessage.includes("edge function")) {
+        const fallbackInsert = await supabase.from("notifications").insert({
+          title: title.trim(),
+          message: message.trim(),
+          created_by: user.id,
+        });
+
+        setSending(false);
+
+        if (!fallbackInsert.error) {
+          setTitle("");
+          setMessage("");
+          toast({ title: "Broadcast Sent", description: "All staff will see this message in notifications." });
+          return;
+        }
+
+        if (isMissingPublicTableError(fallbackInsert.error, "notifications")) {
+          setSchemaError(getNotificationSystemErrorMessage(fallbackInsert.error));
+        } else {
+          toast({ title: "Error", description: fallbackInsert.error.message, variant: "destructive" });
+        }
+        return;
+      }
+
+      setSending(false);
+
+      if (
+        isMissingPublicTableError(error, "notifications") ||
+        lowerMessage.includes("notifications table") ||
+        lowerMessage.includes("schema cache") ||
+        lowerMessage.includes("supabase db push")
+      ) {
+        setSchemaError(errorMessage);
+      } else {
+        toast({ title: "Error", description: errorMessage, variant: "destructive" });
+      }
+      return;
+    }
+
+    setSending(false);
+    setTitle("");
+    setMessage("");
+    toast({ title: "Broadcast Sent", description: data?.message ?? "All staff will see this message in notifications." });
+  };
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader>
+        <CardTitle>Broadcast Message</CardTitle>
+        <CardDescription>
+          Send a school-wide message to staff. Notifications themselves stay in the Notifications tab.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {schemaError ? <p className="text-sm text-destructive">{schemaError}</p> : null}
+
+        <div className="space-y-2">
+          <Label htmlFor="broadcast-title">Title</Label>
+          <Input
+            id="broadcast-title"
+            placeholder="Broadcast title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="broadcast-message">Message</Label>
+          <Textarea
+            id="broadcast-message"
+            rows={5}
+            placeholder="Write the message staff should receive."
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+          />
+        </div>
+
+        <Button onClick={sendBroadcast} disabled={sending}>
+          {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+          Send Broadcast
+        </Button>
       </CardContent>
     </Card>
   );
