@@ -23,6 +23,9 @@ const PAGE_SIZE = 25;
 
 type SortKey = "timestamp" | "staff_name" | "status";
 type SortDir = "asc" | "desc";
+type DashboardStatusFilter = "all" | "clocked_in" | "present" | "late" | "break" | "absent" | "on_leave" | "anomalies";
+
+const CLOCKED_IN_STATUSES = new Set(["present", "late"]);
 
 const AdminDashboard = () => {
   const { user } = useAuth();
@@ -35,7 +38,7 @@ const AdminDashboard = () => {
   const [dateFrom, setDateFrom] = useState(format(new Date(), "yyyy-MM-dd"));
   const [dateTo, setDateTo] = useState(format(new Date(), "yyyy-MM-dd"));
   const [searchParams] = useSearchParams();
-  const [statusFilter, setStatusFilter] = useState<"all" | "present" | "late" | "break" | "absent" | "on_leave" | "anomalies">("all");
+  const [statusFilter, setStatusFilter] = useState<DashboardStatusFilter>("all");
   const [deviceFilter, setDeviceFilter] = useState("all");
   const [complianceFilter, setComplianceFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -64,9 +67,10 @@ const AdminDashboard = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [attRes, staffRes, settRes, leaveRes, workSessionRes, allLeaveRes] = await Promise.all([
-        supabase.from("attendance").select("*").gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59").order("timestamp", { ascending: false }).limit(5000),
+      const [attRes, staffRes, roleRes, settRes, leaveRes, workSessionRes, allLeaveRes] = await Promise.all([
+        supabase.from("attendance").select("*").gte("timestamp", dateFrom + "T00:00:00").lte("timestamp", dateTo + "T23:59:59").order("timestamp", { ascending: false }).limit(5000),
         supabase.from("profiles").select("id, name, user_id, status").order("name"),
+        supabase.from("user_roles").select("user_id").eq("role", "staff"),
         supabase.from("settings").select("*").limit(1).maybeSingle(),
         supabase.from("leave_requests").select("*").eq("status", "approved").lte("start_date", format(new Date(), "yyyy-MM-dd")).gte("end_date", format(new Date(), "yyyy-MM-dd")),
         supabase.from("work_sessions").select("*").gte("session_date", dateFrom).lte("session_date", dateTo).order("started_at", { ascending: false }).limit(1000),
@@ -85,21 +89,33 @@ const AdminDashboard = () => {
         console.error("Staff fetch error:", staffRes.error);
         toast({ title: "Staff List Error", description: "Failed to load staff list", variant: "destructive" });
       }
+
+      if (roleRes.error) {
+        console.error("Staff role fetch error:", roleRes.error);
+        toast({ title: "Role Data Error", description: "Failed to load staff role assignments", variant: "destructive" });
+      }
+
+      const staffRoleIds = new Set((roleRes.data ?? []).map((row: any) => row.user_id));
+      const activeStaff = (staffRes.data ?? []).filter((staff: any) => staff.status === "active" && staffRoleIds.has(staff.user_id));
+      const attendanceData = (attRes.data ?? []).filter((record: any) => staffRoleIds.has(record.user_id));
+      const approvedLeaveData = (leaveRes.data ?? []).filter((record: any) => staffRoleIds.has(record.user_id));
+      const workSessionData = (workSessionRes.data ?? []).filter((record: any) => staffRoleIds.has(record.user_id));
+      const leaveRequestData = (allLeaveRes.data ?? []).filter((record: any) => staffRoleIds.has(record.user_id));
       
-      setAttendance(attRes.data ?? []);
-      setStaffList(staffRes.data ?? []);
-      setStaffCount((staffRes.data ?? []).filter((s: any) => s.status === "active").length);
+      setAttendance(attendanceData);
+      setStaffList(activeStaff);
+      setStaffCount(activeStaff.length);
       setSettings(settRes.data);
-      setApprovedLeaveToday((leaveRes.data ?? []).length);
-      setWorkSessions(workSessionRes.data ?? []);
-      setLeaveRequests(allLeaveRes.data ?? []);
+      setApprovedLeaveToday(approvedLeaveData.length);
+      setWorkSessions(workSessionData);
+      setLeaveRequests(leaveRequestData);
 
       const staffNameByUserId = new Map<string, string>(
-        (staffRes.data ?? []).map((staff: any) => [staff.user_id, staff.name])
+        activeStaff.map((staff: any) => [staff.user_id, staff.name])
       );
 
       const events: any[] = [];
-      (attRes.data ?? []).forEach((a: any) => {
+      attendanceData.forEach((a: any) => {
         events.push({
           id: `attendance-${a.id}`,
           time: a.created_at || a.timestamp,
@@ -107,7 +123,7 @@ const AdminDashboard = () => {
           type: 'attendance',
         });
       });
-      (workSessionRes.data ?? []).forEach((session: any) => {
+      workSessionData.forEach((session: any) => {
         const staffName = staffNameByUserId.get(session.user_id) ?? session.user_id;
         const sessionStartText =
           session.type === "break" ? `${staffName} started a break` :
@@ -135,7 +151,7 @@ const AdminDashboard = () => {
           });
         }
       });
-      (allLeaveRes.data ?? []).forEach((l: any) => {
+      leaveRequestData.forEach((l: any) => {
         events.push({
           id: `leave-${l.id}`,
           time: l.created_at,
@@ -181,7 +197,7 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     const statusParam = searchParams.get('status');
-    if (statusParam === 'present' || statusParam === 'late' || statusParam === 'break' || statusParam === 'absent') {
+    if (statusParam === 'clocked_in' || statusParam === 'present' || statusParam === 'late' || statusParam === 'break' || statusParam === 'absent') {
       setStatusFilter(statusParam);
     } else if (statusParam === 'on_leave') {
       setStatusFilter('all');
@@ -242,7 +258,11 @@ const AdminDashboard = () => {
   const filtered = useMemo(() => {
     let data = attendance.filter(a => {
       if (statusFilter !== "all" && statusFilter !== "anomalies" && statusFilter !== "on_leave") {
-        if (a.status !== statusFilter) return false;
+        if (statusFilter === "clocked_in") {
+          if (!CLOCKED_IN_STATUSES.has(a.status)) return false;
+        } else if (a.status !== statusFilter) {
+          return false;
+        }
       }
       if (statusFilter === "anomalies" && settings) {
         const d = calcDistance(a.latitude, a.longitude);
@@ -291,12 +311,14 @@ const AdminDashboard = () => {
     return recordTime >= todayStart && recordTime <= todayEnd;
   });
 
-  const presentCount = todayRecords.filter(a => a.status === "present").length;
   const lateCount = todayRecords.filter(a => a.status === "late").length;
-  const breakCount = todayRecords.filter(a => a.status === "break").length;
   
-  // Get unique staff who have clocked in today
-  const clockedInStaff = new Set(todayRecords.map(a => a.user_id));
+  const clockedInStaff = new Set(
+    todayRecords
+      .filter((record) => CLOCKED_IN_STATUSES.has(record.status))
+      .map((record) => record.user_id)
+  );
+  const clockedInTodayCount = clockedInStaff.size;
   const onLeaveToday = approvedLeaveToday;
   const absentCount = Math.max(0, staffCount - clockedInStaff.size - onLeaveToday);
 
@@ -392,7 +414,7 @@ const AdminDashboard = () => {
 
   const cards = [
     { label: "Total Staff", value: staffCount, icon: Users, color: "text-primary", clickable: false },
-    { label: "Clocked In Today", value: presentCount, icon: UserCheck, color: "text-accent", clickable: true, filter: "present" },
+    { label: "Clocked In Today", value: clockedInTodayCount, icon: UserCheck, color: "text-accent", clickable: true, filter: "clocked_in" },
     { label: "Absent Today", value: absentCount, icon: UserX, color: "text-destructive", clickable: true, filter: "absent" },
     { label: "Late Today", value: lateCount, icon: Clock, color: "text-warning", clickable: true, filter: "late" },
   ];
@@ -434,7 +456,7 @@ const AdminDashboard = () => {
       <div className="flex flex-wrap items-center gap-2">
         {[
           { value: 'all', label: 'All' },
-          { value: 'present', label: 'Clocked In' },
+          { value: 'clocked_in', label: 'Clocked In' },
           { value: 'late', label: 'Late' },
           { value: 'break', label: 'Break' },
           { value: 'absent', label: 'Absent' },
@@ -678,11 +700,12 @@ const AdminDashboard = () => {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-8 w-[180px]" />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as DashboardStatusFilter)}>
               <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="present">Present</SelectItem>
+                <SelectItem value="clocked_in">Clocked In</SelectItem>
+                <SelectItem value="present">On Time</SelectItem>
                 <SelectItem value="late">Late</SelectItem>
               </SelectContent>
             </Select>
