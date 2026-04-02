@@ -1,35 +1,431 @@
-import { Link, useNavigate } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { format, formatDistanceToNow } from "date-fns";
+import {
+  ArrowLeft,
+  Bell,
+  Calendar,
+  FilePlus2,
+  History,
+  Loader2,
+  Menu,
+  Send,
+  type LucideIcon,
+} from "lucide-react";
+import AdminLeaveRequestsPanel from "@/components/AdminLeaveRequestsPanel";
 import NotificationsPanel from "@/components/NotificationsPanel";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useNotifications } from "@/hooks/use-notifications";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Send, Calendar, MessageSquare } from "lucide-react";
 import { Tables } from "@/integrations/supabase/types";
+import { cn } from "@/lib/utils";
 
 type LeaveRequest = Tables<"leave_requests">;
+type StaffSection = "notifications" | "requests" | "history";
+type AdminSection = "broadcast" | "notifications" | "requests";
+type SectionKey = StaffSection | AdminSection;
+
+type SectionOption = {
+  value: SectionKey;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+};
+
+const STAFF_SECTIONS: SectionOption[] = [
+  {
+    value: "notifications",
+    label: "Notifications",
+    description: "Open messages and review updates.",
+    icon: Bell,
+  },
+  {
+    value: "requests",
+    label: "Make Request",
+    description: "Submit a new leave request.",
+    icon: FilePlus2,
+  },
+  {
+    value: "history",
+    label: "My Requests",
+    description: "Track every leave request you have sent.",
+    icon: History,
+  },
+];
+
+const ADMIN_SECTIONS: SectionOption[] = [
+  {
+    value: "broadcast",
+    label: "Broadcast",
+    description: "Send a message to the whole team.",
+    icon: Send,
+  },
+  {
+    value: "notifications",
+    label: "Notifications",
+    description: "Review the current notification feed.",
+    icon: Bell,
+  },
+  {
+    value: "requests",
+    label: "Staff Requests",
+    description: "Approve or reject leave requests.",
+    icon: Calendar,
+  },
+];
+
+const getValidSection = (value: string | null, isAdmin: boolean): SectionKey => {
+  const allowed = (isAdmin ? ADMIN_SECTIONS : STAFF_SECTIONS).map((section) => section.value);
+
+  if (value && allowed.includes(value as SectionKey)) {
+    return value as SectionKey;
+  }
+
+  return isAdmin ? "broadcast" : "notifications";
+};
 
 const NotificationsPage = () => {
-  const { user, role } = useAuth();
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const sectionOptions = isAdmin ? ADMIN_SECTIONS : STAFF_SECTIONS;
+  const activeSection = getValidSection(searchParams.get("view"), isAdmin);
+  const selectedNotificationId = searchParams.get("notification");
+  const activeSectionMeta = sectionOptions.find((section) => section.value === activeSection) ?? sectionOptions[0];
+
+  const setView = (section: SectionKey) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("view", section);
+
+    if (section !== "notifications") {
+      next.delete("notification");
+    }
+
+    setSearchParams(next, { replace: true });
+    setMobileMenuOpen(false);
+  };
+
+  const selectNotification = (notificationId: string | null) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("view", "notifications");
+
+    if (notificationId) {
+      next.set("notification", notificationId);
+    } else {
+      next.delete("notification");
+    }
+
+    setSearchParams(next, { replace: true });
+  };
+
+  return (
+    <div className="p-4 md:p-6">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">{isAdmin ? "Admin Notifications" : "Notifications"}</h1>
+          <p className="text-sm text-muted-foreground">
+            {isAdmin
+              ? "Manage school-wide broadcasts and staff leave requests."
+              : "Read updates, submit requests, and keep track of your leave history."}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {!isAdmin ? (
+            <Button variant="outline" size="sm" onClick={() => setView("requests")} className="hidden sm:inline-flex">
+              <FilePlus2 className="mr-2 h-4 w-4" />
+              Make Request
+            </Button>
+          ) : null}
+
+          <Link
+            to={isAdmin ? "/admin/dashboard" : "/staff"}
+            className="inline-flex h-9 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            Go Back
+          </Link>
+        </div>
+      </div>
+
+      <div className="mb-6 hidden gap-2 md:grid md:grid-cols-3">
+        {sectionOptions.map((section) => (
+          <Button
+            key={section.value}
+            variant={activeSection === section.value ? "default" : "outline"}
+            className="h-auto justify-start gap-3 px-4 py-3 text-left"
+            onClick={() => setView(section.value)}
+          >
+            <section.icon className="h-4 w-4 shrink-0" />
+            <div className="min-w-0">
+              <div className="font-medium">{section.label}</div>
+              <div className="truncate text-xs opacity-80">{section.description}</div>
+            </div>
+          </Button>
+        ))}
+      </div>
+
+      <div className="mb-6 flex items-center justify-between gap-3 rounded-2xl border bg-card p-4 md:hidden">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Current Section</p>
+          <h2 className="truncate text-lg font-semibold">{activeSectionMeta.label}</h2>
+          <p className="text-sm text-muted-foreground">{activeSectionMeta.description}</p>
+        </div>
+
+        <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="icon">
+              <Menu className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-[280px] sm:max-w-[280px]">
+            <SheetHeader>
+              <SheetTitle>Sections</SheetTitle>
+              <SheetDescription>
+                Switch between notifications, requests, and other actions from one clean menu.
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="mt-6 space-y-2">
+              {sectionOptions.map((section) => (
+                <Button
+                  key={section.value}
+                  variant={activeSection === section.value ? "default" : "ghost"}
+                  className="h-auto w-full justify-start gap-3 px-3 py-3 text-left"
+                  onClick={() => setView(section.value)}
+                >
+                  <section.icon className="h-4 w-4 shrink-0" />
+                  <div>
+                    <div>{section.label}</div>
+                    <div className="text-xs opacity-80">{section.description}</div>
+                  </div>
+                </Button>
+              ))}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {isAdmin ? (
+        <>
+          {activeSection === "broadcast" ? <NotificationsPanel enableBroadcast /> : null}
+          {activeSection === "notifications" ? <NotificationsPanel /> : null}
+          {activeSection === "requests" ? <AdminLeaveRequestsPanel /> : null}
+        </>
+      ) : (
+        <>
+          {activeSection === "notifications" ? (
+            <StaffNotificationInbox
+              selectedNotificationId={selectedNotificationId}
+              onSelectNotification={selectNotification}
+              onMakeRequest={() => setView("requests")}
+            />
+          ) : null}
+
+          {activeSection === "requests" ? (
+            <StaffLeaveRequestForm onSubmitted={() => setView("history")} />
+          ) : null}
+
+          {activeSection === "history" ? (
+            <StaffRequestsHistory onMakeRequest={() => setView("requests")} />
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+};
+
+const StaffNotificationInbox = ({
+  selectedNotificationId,
+  onSelectNotification,
+  onMakeRequest,
+}: {
+  selectedNotificationId: string | null;
+  onSelectNotification: (notificationId: string | null) => void;
+  onMakeRequest: () => void;
+}) => {
+  const { notifications, unreadCount, loading, error, markAllAsRead, markAsRead } = useNotifications();
+
+  const selectedNotification = useMemo(
+    () => notifications.find((notification) => notification.id === selectedNotificationId) ?? null,
+    [notifications, selectedNotificationId]
+  );
+
+  useEffect(() => {
+    if (selectedNotificationId && notifications.length > 0 && !selectedNotification) {
+      onSelectNotification(null);
+    }
+  }, [notifications.length, onSelectNotification, selectedNotification, selectedNotificationId]);
+
+  const openNotification = async (notificationId: string) => {
+    onSelectNotification(notificationId);
+    await markAsRead(notificationId);
+  };
+
+  if (selectedNotification) {
+    return (
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Button variant="ghost" size="sm" className="-ml-2 gap-2" onClick={() => onSelectNotification(null)}>
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+
+            <Button variant="outline" size="sm" onClick={onMakeRequest}>
+              <FilePlus2 className="mr-2 h-4 w-4" />
+              Make Request
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-xl">{selectedNotification.title}</CardTitle>
+              <Badge variant={selectedNotification.read ? "secondary" : "default"}>
+                {selectedNotification.read ? "Read" : "Unread"}
+              </Badge>
+            </div>
+            <CardDescription>
+              {format(new Date(selectedNotification.created_at), "EEEE, MMMM d, yyyy 'at' h:mm a")}
+            </CardDescription>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          <div className="rounded-2xl border bg-muted/20 p-4 text-sm leading-6 whitespace-pre-wrap">
+            {selectedNotification.message}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle>Inbox</CardTitle>
+            <CardDescription>
+              {unreadCount > 0
+                ? `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"} waiting for you.`
+                : "You're all caught up."}
+            </CardDescription>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button variant="outline" size="sm" onClick={() => void markAllAsRead()} disabled={!unreadCount || loading}>
+              Mark all read
+            </Button>
+            <Button variant="outline" size="sm" onClick={onMakeRequest}>
+              <FilePlus2 className="mr-2 h-4 w-4" />
+              Make Request
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : error ? (
+          <p className="text-sm text-destructive">{error}</p>
+        ) : notifications.length === 0 ? (
+          <div className="rounded-2xl border border-dashed p-8 text-center">
+            <p className="text-sm text-muted-foreground">No notifications yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {notifications.map((notification) => (
+              <button
+                type="button"
+                key={notification.id}
+                onClick={() => void openNotification(notification.id)}
+                className={cn(
+                  "w-full rounded-2xl border p-4 text-left transition-colors hover:border-primary/50 hover:bg-muted/40",
+                  notification.read ? "bg-background" : "border-primary/30 bg-primary/5"
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={cn(
+                      "mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+                      notification.read ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"
+                    )}
+                  >
+                    {notification.title.trim().charAt(0).toUpperCase() || "N"}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className={cn("truncate text-sm", !notification.read && "font-semibold")}>
+                        {notification.title}
+                      </p>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
+                      </span>
+                    </div>
+
+                    <p className="mt-1 truncate text-sm text-muted-foreground">
+                      {notification.message}
+                    </p>
+                  </div>
+
+                  {!notification.read ? <span className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-primary" /> : null}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+const StaffLeaveRequestForm = ({ onSubmitted }: { onSubmitted: () => void }) => {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [leaveReason, setLeaveReason] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const handleLeaveRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
+  const handleLeaveRequest = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!user) {
+      return;
+    }
 
     if (!startDate || !endDate) {
-      toast({ title: "Validation", description: "Please select start and end dates.", variant: "destructive" });
+      toast({ title: "Dates required", description: "Please select both dates.", variant: "destructive" });
+      return;
+    }
+
+    if (endDate < startDate) {
+      toast({
+        title: "Invalid date range",
+        description: "The end date must be the same as or after the start date.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -39,11 +435,11 @@ const NotificationsPage = () => {
       .from("profiles")
       .select("name")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (profileError) {
       setSubmitting(false);
-      toast({ title: "Error", description: profileError.message, variant: "destructive" });
+      toast({ title: "Unable to submit", description: profileError.message, variant: "destructive" });
       return;
     }
 
@@ -52,289 +448,112 @@ const NotificationsPage = () => {
       staff_name: profile?.name || "Unknown",
       start_date: startDate,
       end_date: endDate,
-      reason: leaveReason || null,
+      reason: leaveReason.trim() || null,
     });
 
     setSubmitting(false);
 
     if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Request Submitted", description: "Your leave request has been submitted for approval." });
-      setLeaveReason("");
-      setStartDate("");
-      setEndDate("");
+      toast({ title: "Unable to submit", description: error.message, variant: "destructive" });
+      return;
     }
+
+    toast({
+      title: "Request submitted",
+      description: "Your leave request has been sent to admin for review.",
+    });
+
+    setLeaveReason("");
+    setStartDate("");
+    setEndDate("");
+    onSubmitted();
   };
 
-  const isAdmin = role === "admin";
-
   return (
-    <div className="p-4 md:p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">{isAdmin ? "Admin" : "Staff"} Notifications</h1>
-          <p className="text-sm text-muted-foreground">
-            {isAdmin ? "Manage broadcasts and staff requests" : "View notifications and submit requests"}
-          </p>
-        </div>
-        <Link to={isAdmin ? "/admin/dashboard" : "/staff"} className="text-sm text-primary hover:underline">
-          Go Back
-        </Link>
-      </div>
-
-      <Tabs defaultValue={isAdmin ? "broadcast" : "notifications"} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
-          {isAdmin ? (
-            <>
-              <TabsTrigger value="broadcast" className="flex items-center gap-2">
-                <Send className="h-4 w-4" />
-                Broadcast
-              </TabsTrigger>
-              <TabsTrigger value="notifications" className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" />
-                General Notifications
-              </TabsTrigger>
-              <TabsTrigger value="requests" className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Staff Requests
-              </TabsTrigger>
-            </>
-          ) : (
-            <>
-              <TabsTrigger value="notifications" className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" />
-                General Notifications
-              </TabsTrigger>
-              <TabsTrigger value="requests" className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                Make Requests
-              </TabsTrigger>
-              <TabsTrigger value="history" className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                My Requests
-              </TabsTrigger>
-            </>
-          )}
-        </TabsList>
-
-        {isAdmin ? (
-          <>
-            <TabsContent value="broadcast">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Send Broadcast Message</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <NotificationsPanel enableBroadcast />
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="notifications">
-              <Card>
-                <CardHeader>
-                  <CardTitle>General Notifications</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <NotificationsPanel />
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="requests">
-              <StaffRequestsAdmin />
-            </TabsContent>
-          </>
-        ) : (
-          <>
-            <TabsContent value="notifications">
-              <Card>
-                <CardHeader>
-                  <CardTitle>General Notifications</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <NotificationsPanel />
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="requests">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Submit Leave Request</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleLeaveRequest} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="start-date">Start Date</Label>
-                        <Input
-                          id="start-date"
-                          type="date"
-                          value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="end-date">End Date</Label>
-                        <Input
-                          id="end-date"
-                          type="date"
-                          value={endDate}
-                          onChange={(e) => setEndDate(e.target.value)}
-                          required
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <Label htmlFor="reason">Reason (Optional)</Label>
-                      <Textarea
-                        id="reason"
-                        placeholder="Please provide a reason for your leave request..."
-                        value={leaveReason}
-                        onChange={(e) => setLeaveReason(e.target.value)}
-                        rows={3}
-                      />
-                    </div>
-                    <Button type="submit" disabled={submitting} className="w-full">
-                      {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Submit Leave Request
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="history">
-              <StaffRequestsHistory />
-            </TabsContent>
-          </>
-        )}
-      </Tabs>
-    </div>
-  );
-};
-
-const StaffRequestsAdmin = () => {
-  const navigate = useNavigate();
-  const [requests, setRequests] = useState<LeaveRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    const fetchRequests = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("leave_requests")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
-      }
-
-      setRequests(data ?? []);
-      setLoading(false);
-    };
-
-    fetchRequests();
-  }, [toast]);
-
-  const updateRequestStatus = async (id: string, status: string, note?: string) => {
-    const { error } = await supabase
-      .from("leave_requests")
-      .update({ status, admin_note: note || null })
-      .eq("id", id);
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      setRequests((current) => current.map((request) => (
-        request.id === id ? { ...request, status, admin_note: note ?? null } : request
-      )));
-      toast({ title: "Updated", description: `Request ${status}.` });
-    }
-  };
-
-  if (loading) return <div>Loading requests...</div>;
-
-  return (
-    <Card>
+    <Card className="border-0 shadow-sm">
       <CardHeader>
-        <CardTitle>Staff Leave Requests</CardTitle>
+        <CardTitle>Submit Leave Request</CardTitle>
+        <CardDescription>Choose the dates you need and include any context that will help admin review it quickly.</CardDescription>
       </CardHeader>
+
       <CardContent>
-        <div className="space-y-4">
-          {requests.length === 0 ? (
-            <p className="text-muted-foreground">No leave requests have been submitted yet.</p>
-          ) : (
-            requests.map((request) => (
-              <div key={request.id} className="border rounded-lg p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <p className="font-semibold">{request.staff_name}</p>
-                    <p className="text-sm text-muted-foreground">{request.start_date} to {request.end_date}</p>
-                  </div>
-                  <Badge
-                    variant={
-                      request.status === "approved"
-                        ? "default"
-                        : request.status === "rejected"
-                          ? "destructive"
-                          : "secondary"
-                    }
-                  >
-                    {request.status}
-                  </Badge>
-                </div>
-                <p className="text-sm mb-2">Reason: {request.reason || "N/A"}</p>
-                {request.admin_note && <p className="text-sm text-muted-foreground">Admin note: {request.admin_note}</p>}
-                {request.status === "pending" && (
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={() => updateRequestStatus(request.id, "approved")}>
-                      Approve
-                    </Button>
-                    <Button size="sm" variant="destructive" onClick={() => updateRequestStatus(request.id, "rejected")}>
-                      Reject
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-        <div className="mt-4 text-center">
-          <Button variant="outline" onClick={() => navigate("/admin/dashboard")}>
-            Back to Dashboard
+        <form onSubmit={handleLeaveRequest} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="start-date">Start Date</Label>
+              <Input
+                id="start-date"
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="end-date">End Date</Label>
+              <Input
+                id="end-date"
+                type="date"
+                value={endDate}
+                onChange={(event) => setEndDate(event.target.value)}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="leave-reason">Reason</Label>
+            <Textarea
+              id="leave-reason"
+              rows={4}
+              placeholder="Add a short reason or any handover note for admin."
+              value={leaveReason}
+              onChange={(event) => setLeaveReason(event.target.value)}
+            />
+          </div>
+
+          <Button type="submit" className="w-full sm:w-auto" disabled={submitting}>
+            {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilePlus2 className="mr-2 h-4 w-4" />}
+            Submit Leave Request
           </Button>
-        </div>
+        </form>
       </CardContent>
     </Card>
   );
 };
 
-const StaffRequestsHistory = () => {
-  const navigate = useNavigate();
+const StaffRequestsHistory = ({ onMakeRequest }: { onMakeRequest: () => void }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
+
+    let mounted = true;
 
     const fetchRequests = async () => {
       setLoading(true);
+
       const { data, error } = await supabase
         .from("leave_requests")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
+      if (!mounted) {
+        return;
+      }
+
       if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
+        toast({ title: "Unable to load requests", description: error.message, variant: "destructive" });
+        setRequests([]);
+        setLoading(false);
+        return;
       }
 
       setRequests(data ?? []);
@@ -342,28 +561,46 @@ const StaffRequestsHistory = () => {
     };
 
     fetchRequests();
+
+    return () => {
+      mounted = false;
+    };
   }, [toast, user]);
 
-  if (loading) return <div>Loading your requests...</div>;
-
   return (
-    <Card>
+    <Card className="border-0 shadow-sm">
       <CardHeader>
         <CardTitle>My Leave Requests</CardTitle>
+        <CardDescription>Track the status of every request you have submitted.</CardDescription>
       </CardHeader>
+
       <CardContent>
-        <div className="space-y-4">
-          {requests.length === 0 ? (
-            <p className="text-muted-foreground">You have not submitted any leave requests yet.</p>
-          ) : (
-            requests.map((request) => (
-              <div key={request.id} className="border rounded-lg p-4">
-                <div className="flex justify-between items-start mb-2">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : requests.length === 0 ? (
+          <div className="rounded-2xl border border-dashed p-8 text-center">
+            <p className="text-sm text-muted-foreground">You have not submitted any leave requests yet.</p>
+            <Button variant="outline" className="mt-4" onClick={onMakeRequest}>
+              <FilePlus2 className="mr-2 h-4 w-4" />
+              Make Request
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {requests.map((request) => (
+              <div key={request.id} className="rounded-2xl border bg-background p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">
-                      {request.start_date} to {request.end_date}
+                    <p className="font-medium">
+                      {format(new Date(request.start_date), "MMM d, yyyy")} to {format(new Date(request.end_date), "MMM d, yyyy")}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Submitted {format(new Date(request.created_at), "MMM d, yyyy 'at' h:mm a")}
                     </p>
                   </div>
+
                   <Badge
                     variant={
                       request.status === "approved"
@@ -376,17 +613,22 @@ const StaffRequestsHistory = () => {
                     {request.status}
                   </Badge>
                 </div>
-                {request.reason && <p className="text-sm mb-2">Reason: {request.reason}</p>}
-                {request.admin_note && <p className="text-sm text-muted-foreground">Admin note: {request.admin_note}</p>}
+
+                {request.reason ? (
+                  <p className="mt-3 text-sm">
+                    <span className="font-medium">Reason:</span> {request.reason}
+                  </p>
+                ) : null}
+
+                {request.admin_note ? (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">Admin note:</span> {request.admin_note}
+                  </p>
+                ) : null}
               </div>
-            ))
-          )}
-        </div>
-        <div className="mt-6 text-center">
-          <Button variant="outline" onClick={() => navigate("/staff")}>
-            Back to Dashboard
-          </Button>
-        </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

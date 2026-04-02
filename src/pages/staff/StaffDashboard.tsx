@@ -4,13 +4,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "@/contexts/LocationContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { useNotificationCount } from "@/hooks/use-notification-count";
-import NotificationsPanel from "@/components/NotificationsPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2, MapPin, LogOut, Loader2, XCircle, LogIn, History, ChevronDown, CalendarOff, Coffee, Briefcase, Play, Pause, Power, AlertCircle } from "lucide-react";
+import { CheckCircle2, MapPin, LogOut, Loader2, XCircle, LogIn, History, ChevronDown, CalendarOff, Coffee, Briefcase, Play, Pause, Power, AlertCircle, Bell, FilePlus2 } from "lucide-react";
 import { format, differenceInMinutes, parseISO } from "date-fns";
+import { useNotifications } from "@/hooks/use-notifications";
 import { getDeviceInfo } from "@/lib/device-info";
 import { getDistanceInMeters } from "@/lib/geo";
 
@@ -41,18 +40,10 @@ type WorkSessionRecord = {
   created_at: string;
 };
 
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  created_by: string | null;
-  created_at: string;
-}
-
 const StaffDashboard = () => {
   const { user, profile, signOut } = useAuth();
   const { latitude, longitude } = useLocation();
-  const { unreadCount } = useNotificationCount();
+  const { notifications, unreadCount } = useNotifications();
   const { toast } = useToast();
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -61,7 +52,6 @@ const StaffDashboard = () => {
   const [todayAttendance, setTodayAttendance] = useState<AttendanceRecord | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [distanceToSchool, setDistanceToSchool] = useState<number | null>(null);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [todaySessions, setTodaySessions] = useState<WorkSessionRecord[]>([]);
   const [activeSession, setActiveSession] = useState<WorkSessionRecord | null>(null);
   const [clockOutTime, setClockOutTime] = useState<Date | null>(null);
@@ -119,24 +109,11 @@ const StaffDashboard = () => {
     }
   }, [latitude, longitude]);
 
-  // Fetch recent notifications
-  const fetchNotifications = useCallback(async () => {
-    const { data } = await supabase
-      .from("notifications")
-      .select("id,title,message,created_by,created_at")
-      .order("created_at", { ascending: false })
-      .limit(3);
-    if (data) {
-      setNotifications(data);
-    }
-  }, []);
-
   useEffect(() => {
     fetchTodayAttendance();
     fetchTodaySessions();
     fetchSettingsAndDistance();
-    fetchNotifications();
-  }, [fetchTodayAttendance, fetchTodaySessions, fetchSettingsAndDistance, fetchNotifications]);
+  }, [fetchTodayAttendance, fetchTodaySessions, fetchSettingsAndDistance]);
 
   useEffect(() => {
     if (todayAttendance?.clock_out) {
@@ -203,24 +180,6 @@ const StaffDashboard = () => {
       supabase.removeChannel(channel);
     };
   }, [fetchTodaySessions, user?.id]);
-
-  // Real-time listener for notifications
-  useEffect(() => {
-    const channel = supabase
-      .channel("staff-notifications-realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications" },
-        (payload) => {
-          console.log("New notification:", payload);
-          fetchNotifications();
-        }
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [fetchNotifications]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -385,6 +344,11 @@ const StaffDashboard = () => {
     return differenceInMinutes(clockedOut, clockedIn) / 60;
   }, [todayAttendance, currentTime]);
 
+  const latestNotifications = useMemo(
+    () => notifications.slice(0, 2),
+    [notifications]
+  );
+
   const getIconForType = (status: string) => {
     switch (status) {
       case "present":
@@ -463,8 +427,19 @@ const StaffDashboard = () => {
           <p className="text-sm opacity-90">Welcome, {profile?.name || "Staff Member"}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Link to="/notifications" className="px-3 py-1 rounded-md bg-secondary text-secondary-foreground text-sm">
+          <Link
+            to="/notifications?view=notifications"
+            className="inline-flex items-center gap-2 rounded-md bg-secondary px-3 py-1 text-sm text-secondary-foreground"
+          >
+            <Bell className="h-4 w-4" />
             Notifications {unreadCount > 0 ? `(${unreadCount})` : ""}
+          </Link>
+          <Link
+            to="/notifications?view=requests"
+            className="inline-flex items-center gap-1 rounded-md border border-primary-foreground/30 px-2.5 py-1 text-xs text-primary-foreground sm:gap-2 sm:px-3 sm:text-sm"
+          >
+            <FilePlus2 className="h-4 w-4" />
+            Request
           </Link>
           <Button variant="ghost" size="icon" onClick={signOut} className="text-primary-foreground hover:bg-primary/80">
             <LogOut className="h-5 w-5" />
@@ -589,30 +564,62 @@ const StaffDashboard = () => {
         )}
 
         {/* Latest Notifications */}
-        {notifications.length > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Latest Notifications</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {notifications.map((notif) => (
-                <div key={notif.id} className="border rounded-lg p-3">
-                  <p className="font-semibold text-sm">{notif.title}</p>
-                  <p className="text-xs text-muted-foreground">{notif.message}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{format(parseISO(notif.created_at), "MMM d, h:mm a")}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">Latest Notifications</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {unreadCount > 0
+                    ? `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"} waiting for you.`
+                    : "No missed notifications right now."}
+                </p>
+              </div>
+              {unreadCount > 0 ? <Badge>{unreadCount}</Badge> : null}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {latestNotifications.length === 0 ? (
+              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                No notifications yet.
+              </p>
+            ) : (
+              latestNotifications.map((notification) => (
+                <Link
+                  key={notification.id}
+                  to={`/notifications?view=notifications&notification=${notification.id}`}
+                  className="block rounded-lg border p-3 transition-colors hover:border-primary/50 hover:bg-muted/40"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{notification.title}</p>
+                      <p className="truncate text-xs text-muted-foreground">{notification.message}</p>
+                    </div>
+                    {!notification.read ? <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-primary" /> : null}
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {format(parseISO(notification.created_at), "MMM d, h:mm a")}
+                  </p>
+                </Link>
+              ))
+            )}
 
-        <div className="flex justify-center">
-          <Link to="/notifications" className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors">
-            View All Notifications
-          </Link>
-        </div>
-
-        <NotificationsPanel />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Link
+                to="/notifications?view=notifications"
+                className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                View All Notifications
+              </Link>
+              <Link
+                to="/notifications?view=requests"
+                className="inline-flex items-center justify-center rounded-md border border-input px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                Make Request
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
