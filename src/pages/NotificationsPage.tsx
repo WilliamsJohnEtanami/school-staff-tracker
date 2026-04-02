@@ -63,7 +63,7 @@ const STAFF_SECTIONS: SectionOption[] = [
   {
     value: "feedback",
     label: "Feedback",
-    description: "Send complaints, suggestions, or questions to admin.",
+    description: "Chat with admin about complaints, suggestions, or questions.",
     icon: MessageSquareText,
   },
   {
@@ -102,7 +102,7 @@ const ADMIN_SECTIONS: SectionOption[] = [
   {
     value: "feedback",
     label: "Feedback",
-    description: "Reply directly to staff feedback threads.",
+    description: "Reply directly to staff feedback conversations.",
     icon: MessageSquareText,
   },
 ];
@@ -160,8 +160,8 @@ const NotificationsPage = () => {
           <h1 className="text-2xl font-bold">{isAdmin ? "Admin Notifications" : "Notifications"}</h1>
           <p className="text-sm text-muted-foreground">
             {isAdmin
-              ? "Manage broadcasts, leave requests, and direct staff feedback conversations."
-              : "Read updates, send feedback, submit requests, and keep track of your leave history."}
+              ? "Manage broadcasts, leave requests, and direct staff message conversations."
+              : "Read updates, message admin, submit requests, and keep track of your leave history."}
           </p>
         </div>
 
