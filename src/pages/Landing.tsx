@@ -4,9 +4,10 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
+import LogoMark from "@/components/LogoMark";
 import {
   MapPin, Clock, Shield, Smartphone, BarChart3,
-  Users, CheckCircle, ArrowRight, GraduationCap, Moon, Sun
+  Users, CheckCircle, ArrowRight, Moon, Sun
 } from "lucide-react";
 import dashboardMockup from "@/assets/dashboard-mockup.png";
 import mobileCheckin from "@/assets/mobile-checkin.png";
@@ -80,7 +81,7 @@ const Landing = () => {
       <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-5xl mx-auto flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <GraduationCap className="h-6 w-6 text-primary" />
+            <LogoMark className="h-6 w-6" alt="" />
             <span className="font-bold text-foreground text-lg">StaffTrack</span>
           </div>
           <div className="flex items-center gap-2">
@@ -305,7 +306,7 @@ const Landing = () => {
       <footer className="border-t border-border py-6 px-4">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <GraduationCap className="w-4 h-4 text-primary" />
+            <LogoMark className="w-4 h-4" alt="" />
             <span className="font-medium text-foreground">StaffTrack</span>
           </div>
           <span>GPS-verified attendance for schools</span>

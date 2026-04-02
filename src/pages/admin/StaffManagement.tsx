@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, UserCog } from "lucide-react";
+import { getFunctionErrorMessage } from "@/lib/supabase-errors";
 
 const StaffManagement = () => {
   const [staff, setStaff] = useState<any[]>([]);
@@ -23,8 +24,13 @@ const StaffManagement = () => {
 
   const fetchStaff = async () => {
     setLoading(true);
-    const { data } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
-    setStaff(data ?? []);
+    const [{ data: profiles }, { data: roles }] = await Promise.all([
+      supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+      supabase.from("user_roles").select("user_id").eq("role", "staff"),
+    ]);
+
+    const staffIds = new Set((roles ?? []).map((row) => row.user_id));
+    setStaff((profiles ?? []).filter((profile) => staffIds.has(profile.user_id)));
     setLoading(false);
   };
 
@@ -33,15 +39,13 @@ const StaffManagement = () => {
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdding(true);
-
-    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
     const res = await supabase.functions.invoke("manage-staff", {
       body: { action: "create", name, email, password },
     });
 
     setAdding(false);
     if (res.error) {
-      toast({ title: "Error", description: res.error.message, variant: "destructive" });
+      toast({ title: "Error", description: getFunctionErrorMessage(res.error), variant: "destructive" });
     } else {
       toast({ title: "Staff Added", description: `${name} has been added successfully.` });
       setName(""); setEmail(""); setPassword("");

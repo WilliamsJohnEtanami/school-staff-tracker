@@ -1,10 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
 import {
   LineChart,
   Line,
@@ -21,13 +19,10 @@ import {
   Cell,
 } from "recharts";
 import {
-  Users,
   TrendingUp,
   Clock,
   AlertCircle,
-  CheckCircle,
   User,
-  X,
 } from "lucide-react";
 import {
   Dialog,
@@ -35,12 +30,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-interface StaffMember {
-  id: string;
-  name: string;
-  email: string;
-}
+import { useToast } from "@/hooks/use-toast";
+import { getDistanceInMeters } from "@/lib/geo";
 
 interface AttendanceMetrics {
   date: string;
@@ -64,28 +55,52 @@ interface StaffStats {
   lateCount: number;
 }
 
-const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
+const COLORS = ["#10b981", "#f59e0b", "#3b82f6", "#ef4444", "#8b5cf6"];
 
-// Demo data for analytics when real data isn't available
-const DEMO_ATTENDANCE_DATA: AttendanceMetrics[] = [
-  { date: "3/25/2026", attendanceRate: 92, onTimeCount: 23, lateCount: 2, averageHours: 8.2 },
-  { date: "3/26/2026", attendanceRate: 88, onTimeCount: 22, lateCount: 3, averageHours: 8.0 },
-  { date: "3/27/2026", attendanceRate: 95, onTimeCount: 24, lateCount: 1, averageHours: 8.3 },
-  { date: "3/28/2026", attendanceRate: 90, onTimeCount: 21, lateCount: 2, averageHours: 8.1 },
-  { date: "3/29/2026", attendanceRate: 91, onTimeCount: 22, lateCount: 2, averageHours: 8.0 },
-  { date: "3/30/2026", attendanceRate: 94, onTimeCount: 23, lateCount: 1, averageHours: 8.4 },
-  { date: "3/31/2026", attendanceRate: 93, onTimeCount: 22, lateCount: 2, averageHours: 8.2 },
-];
+const startOfDay = (date: Date) => {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+};
 
-const DEMO_STAFF_STATS: StaffStats[] = [
-  { id: "1", name: "John Doe", email: "john@school.edu", attendanceRate: 95, averageClockInTime: "8:05", averageHoursWorked: 8.2, contractedHours: 8, daysShort: 0, locationAnomalies: 0, absenceCount: 1, lateCount: 1 },
-  { id: "2", name: "Jane Smith", email: "jane@school.edu", attendanceRate: 92, averageClockInTime: "8:15", averageHoursWorked: 8.0, contractedHours: 8, daysShort: 1, locationAnomalies: 0, absenceCount: 2, lateCount: 2 },
-  { id: "3", name: "Mike Johnson", email: "mike@school.edu", attendanceRate: 88, averageClockInTime: "8:30", averageHoursWorked: 7.8, contractedHours: 8, daysShort: 3, locationAnomalies: 1, absenceCount: 3, lateCount: 4 },
-  { id: "4", name: "Sarah Wilson", email: "sarah@school.edu", attendanceRate: 96, averageClockInTime: "7:55", averageHoursWorked: 8.3, contractedHours: 8, daysShort: 0, locationAnomalies: 0, absenceCount: 1, lateCount: 0 },
-  { id: "5", name: "Tom Brown", email: "tom@school.edu", attendanceRate: 85, averageClockInTime: "8:45", averageHoursWorked: 7.5, contractedHours: 8, daysShort: 5, locationAnomalies: 2, absenceCount: 4, lateCount: 5 },
-];
+const toDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
-export default function Analytics() {
+const buildDateRange = (days: number) => {
+  const dates: { key: string; label: string }[] = [];
+  const today = startOfDay(new Date());
+
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    const current = new Date(today);
+    current.setDate(today.getDate() - offset);
+    dates.push({
+      key: toDateKey(current),
+      label: current.toLocaleDateString(),
+    });
+  }
+
+  return dates;
+};
+
+const average = (numbers: number[]) =>
+  numbers.length === 0 ? 0 : numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
+
+const formatAverageClockIn = (minutes: number[]) => {
+  if (minutes.length === 0) return "N/A";
+
+  const avgMinutes = Math.round(average(minutes));
+  const hours = Math.floor(avgMinutes / 60);
+  const mins = avgMinutes % 60;
+  const period = hours >= 12 ? "PM" : "AM";
+  const displayHour = ((hours + 11) % 12) + 1;
+  return `${displayHour}:${`${mins}`.padStart(2, "0")} ${period}`;
+};
+
+const Analytics = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -106,235 +121,269 @@ export default function Analytics() {
 
   useEffect(() => {
     const fetchAnalytics = async () => {
+      if (!user) return;
+
+      setLoading(true);
+
       try {
-        setLoading(true);
+        const dateRange = buildDateRange(30);
+        const rangeStart = dateRange[0]?.key;
+        const todayKey = dateRange[dateRange.length - 1]?.key;
 
-        // Fetch attendance data for last 30 days
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const [
+          roleRes,
+          profileRes,
+          attendanceRes,
+          workSessionRes,
+          leaveRes,
+          settingsRes,
+          contractRes,
+          calendarRes,
+        ] = await Promise.all([
+          supabase.from("user_roles").select("user_id").eq("role", "staff"),
+          supabase.from("profiles").select("user_id, name, email, status").eq("status", "active"),
+          supabase
+            .from("attendance")
+            .select("user_id, status, timestamp, clock_out, latitude, longitude")
+            .gte("timestamp", `${rangeStart}T00:00:00`),
+          supabase
+            .from("work_sessions")
+            .select("user_id, type, session_date, ended_at")
+            .gte("session_date", rangeStart),
+          supabase
+            .from("leave_requests")
+            .select("user_id, status, start_date, end_date")
+            .gte("end_date", rangeStart),
+          supabase.from("settings").select("allowed_radius, school_latitude, school_longitude").limit(1).maybeSingle(),
+          supabase.from("staff_contracts").select("user_id, contracted_hours"),
+          supabase
+            .from("school_calendar")
+            .select("event_date, type")
+            .gte("event_date", rangeStart)
+            .lte("event_date", todayKey),
+        ]);
 
-        const { data: attendanceRecords, error: attendanceError } = await supabase
-          .from("attendance")
-          .select("*")
-          .gte("created_at", thirtyDaysAgo.toISOString());
+        const criticalError =
+          roleRes.error ||
+          profileRes.error ||
+          attendanceRes.error ||
+          workSessionRes.error ||
+          leaveRes.error ||
+          settingsRes.error ||
+          contractRes.error ||
+          calendarRes.error;
 
-        // If error or no data, use demo data
-        if (attendanceError || !attendanceRecords || attendanceRecords.length === 0) {
-          console.warn("Using demo attendance data:", attendanceError?.message);
-          setAttendanceData(DEMO_ATTENDANCE_DATA);
-        } else {
-          // Process attendance data
-          const dailyMetrics: { [key: string]: AttendanceMetrics } = {};
-
-          attendanceRecords.forEach((record: any) => {
-            const date = new Date(record.created_at).toLocaleDateString();
-            if (!dailyMetrics[date]) {
-              dailyMetrics[date] = {
-                date,
-                attendanceRate: 0,
-                onTimeCount: 0,
-                lateCount: 0,
-                averageHours: 0,
-              };
-            }
-
-            if (record.status === "present" || record.status === "late") {
-              if (record.status === "present") {
-                dailyMetrics[date].onTimeCount++;
-              } else if (record.status === "late") {
-                dailyMetrics[date].lateCount++;
-              }
-            }
-
-            if (record.clock_out_time && record.clock_in_time) {
-              const clockIn = new Date(record.clock_in_time).getTime();
-              const clockOut = new Date(record.clock_out_time).getTime();
-              const hours = (clockOut - clockIn) / (1000 * 60 * 60);
-              dailyMetrics[date].averageHours += hours;
-            }
-          });
-
-          // Calculate final metrics
-          const processedData = Object.values(dailyMetrics)
-            .map((metric) => ({
-              ...metric,
-              attendanceRate: Math.round(
-                ((metric.onTimeCount + metric.lateCount) /
-                  (metric.onTimeCount + metric.lateCount + 1)) *
-                  100
-              ),
-              averageHours:
-                Math.round(
-                  (metric.averageHours /
-                    (metric.onTimeCount + metric.lateCount || 1)) *
-                    10
-                ) / 10,
-            }))
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-            .slice(-30);
-
-          setAttendanceData(processedData.length > 0 ? processedData : DEMO_ATTENDANCE_DATA);
+        if (criticalError) {
+          throw criticalError;
         }
 
-        // Fetch live stats
-        const today = new Date().toLocaleDateString();
-        const { data: todayRecords, error: liveError } = await supabase
-          .from("attendance")
-          .select("status")
-          .gte("created_at", new Date(today).toISOString());
+        const staffRoleIds = new Set((roleRes.data ?? []).map((row) => row.user_id));
+        const activeStaff = (profileRes.data ?? []).filter((profile) => staffRoleIds.has(profile.user_id));
+        const attendanceRecords = (attendanceRes.data ?? []).filter((record) => staffRoleIds.has(record.user_id));
+        const workSessions = (workSessionRes.data ?? []).filter((record) => staffRoleIds.has(record.user_id));
+        const approvedLeaves = (leaveRes.data ?? []).filter((record) => staffRoleIds.has(record.user_id) && record.status === "approved");
+        const contractHours = new Map((contractRes.data ?? []).map((row) => [row.user_id, Number(row.contracted_hours ?? 8)]));
 
-        if (liveError || !todayRecords || todayRecords.length === 0) {
-          console.warn("Using demo live stats:", liveError?.message);
-          setLiveStats({
-            inOffice: 18,
-            onBreak: 2,
-            offSite: 1,
-            notIn: 3,
-            onLeave: 1,
-          });
-        } else {
-          const stats = {
-            inOffice: todayRecords.filter(
-              (r: any) => r.status === "present" || r.status === "late"
-            ).length,
-            onBreak: todayRecords.filter((r: any) => r.status === "break").length,
-            offSite: todayRecords.filter((r: any) => r.status === "external")
-              .length,
-            notIn: todayRecords.filter((r: any) => r.status === "absent").length,
-            onLeave: todayRecords.filter((r: any) => r.status === "leave").length,
+        const nonWorkingDays = new Set(
+          (calendarRes.data ?? [])
+            .filter((event) => event.type === "holiday" || event.type === "no_school")
+            .map((event) => event.event_date)
+        );
+
+        const attendanceByDay = new Map<string, typeof attendanceRecords>();
+        const attendanceByUser = new Map<string, typeof attendanceRecords>();
+
+        attendanceRecords.forEach((record) => {
+          const dayKey = record.timestamp.slice(0, 10);
+
+          if (!attendanceByDay.has(dayKey)) {
+            attendanceByDay.set(dayKey, []);
+          }
+          attendanceByDay.get(dayKey)!.push(record);
+
+          if (!attendanceByUser.has(record.user_id)) {
+            attendanceByUser.set(record.user_id, []);
+          }
+          attendanceByUser.get(record.user_id)!.push(record);
+        });
+
+        const isOnApprovedLeave = (userId: string, dayKey: string) =>
+          approvedLeaves.some((leave) => leave.user_id === userId && leave.start_date <= dayKey && leave.end_date >= dayKey);
+
+        const expectedWorkingDays = dateRange
+          .filter(({ key }) => {
+            const date = new Date(`${key}T00:00:00`);
+            const day = date.getDay();
+            return day !== 0 && day !== 6 && !nonWorkingDays.has(key);
+          })
+          .map(({ key }) => key);
+
+        const computedAttendanceData = dateRange.map(({ key, label }) => {
+          const dayAttendance = attendanceByDay.get(key) ?? [];
+          const attendedUsers = new Set(
+            dayAttendance
+              .filter((record) => record.status === "present" || record.status === "late")
+              .map((record) => record.user_id)
+          );
+
+          const onTimeCount = dayAttendance.filter((record) => record.status === "present").length;
+          const lateCount = dayAttendance.filter((record) => record.status === "late").length;
+          const workedHours = dayAttendance
+            .filter((record) => record.clock_out)
+            .map((record) => (new Date(record.clock_out!).getTime() - new Date(record.timestamp).getTime()) / 3600000)
+            .filter((hours) => Number.isFinite(hours) && hours >= 0);
+
+          const expectedStaffCount = expectedWorkingDays.includes(key)
+            ? activeStaff.filter((staff) => !isOnApprovedLeave(staff.user_id, key)).length
+            : 0;
+
+          return {
+            date: label,
+            attendanceRate: expectedStaffCount > 0 ? Math.round((attendedUsers.size / expectedStaffCount) * 100) : 0,
+            onTimeCount,
+            lateCount,
+            averageHours: Math.round(average(workedHours) * 10) / 10,
           };
-          setLiveStats(stats);
-        }
+        });
 
-        // Fetch staff statistics
-        const { data: profiles, error: profilesError } = await supabase
-          .from("profiles")
-          .select("id, full_name, email");
+        const todayAttendance = attendanceByDay.get(todayKey) ?? [];
+        const attendedTodayIds = new Set(
+          todayAttendance
+            .filter((record) => record.status === "present" || record.status === "late")
+            .map((record) => record.user_id)
+        );
 
-        if (profilesError || !profiles || profiles.length === 0) {
-          console.warn("Using demo staff stats:", profilesError?.message);
-          setStaffStats(DEMO_STAFF_STATS);
-          setTopAbsent(DEMO_STAFF_STATS.sort((a, b) => b.absenceCount - a.absenceCount).slice(0, 5));
-          setTopLate(DEMO_STAFF_STATS.sort((a, b) => b.lateCount - a.lateCount).slice(0, 5));
-          setTopShortHours(DEMO_STAFF_STATS.sort((a, b) => b.daysShort - a.daysShort).slice(0, 5));
-          setLoading(false);
-          return;
-        } else {
-          const staffData = await Promise.all(
-            profiles.map(async (profile: any) => {
-              const { data: attendance } = await supabase
-                .from("attendance")
-                .select("*")
-                .eq("user_id", profile.id)
-                .gte("created_at", thirtyDaysAgo.toISOString());
+        const activeSessionsToday = workSessions.filter(
+          (session) => session.session_date === todayKey && session.ended_at === null
+        );
 
-              if (!attendance) return null;
+        const breakIds = new Set(
+          activeSessionsToday.filter((session) => session.type === "break").map((session) => session.user_id)
+        );
+        const offSiteIds = new Set(
+          activeSessionsToday.filter((session) => session.type === "off-site").map((session) => session.user_id)
+        );
+        const workingIds = new Set(
+          activeSessionsToday.filter((session) => session.type === "work").map((session) => session.user_id)
+        );
+        const onLeaveTodayIds = new Set(
+          approvedLeaves
+            .filter((leave) => leave.start_date <= todayKey && leave.end_date >= todayKey)
+            .map((leave) => leave.user_id)
+        );
 
-              let totalHours = 0;
-              let presentDays = 0;
-              let lateDays = 0;
-              let absentDays = 0;
-              let locationAnomalies = 0;
-              let clockInTimes: number[] = [];
+        const inOfficeIds = new Set(
+          [...attendedTodayIds, ...workingIds].filter((userId) => !breakIds.has(userId) && !offSiteIds.has(userId))
+        );
 
-              attendance.forEach((record: any) => {
-                if (record.status === "present") presentDays++;
-                if (record.status === "late") lateDays++;
-                if (record.status === "absent") absentDays++;
-                if (record.location_verified === false) locationAnomalies++;
+        const classifiedIds = new Set([
+          ...inOfficeIds,
+          ...breakIds,
+          ...offSiteIds,
+          ...onLeaveTodayIds,
+        ]);
 
-                if (record.clock_in_time) {
-                  const time = new Date(record.clock_in_time).getHours();
-                  clockInTimes.push(time);
-                }
+        setLiveStats({
+          inOffice: inOfficeIds.size,
+          onBreak: breakIds.size,
+          offSite: offSiteIds.size,
+          notIn: Math.max(activeStaff.length - classifiedIds.size, 0),
+          onLeave: onLeaveTodayIds.size,
+        });
 
-                if (record.clock_out_time && record.clock_in_time) {
-                  const clockIn = new Date(record.clock_in_time).getTime();
-                  const clockOut = new Date(record.clock_out_time).getTime();
-                  totalHours += (clockOut - clockIn) / (1000 * 60 * 60);
-                }
-              });
+        const settings = settingsRes.data;
 
-              const avgClockInTime =
-                clockInTimes.length > 0
-                  ? Math.round(
-                      clockInTimes.reduce((a, b) => a + b, 0) / clockInTimes.length
-                    )
-                  : 0;
-              const attendanceRate = Math.round(
-                ((presentDays + lateDays) / (attendance.length || 1)) * 100
-              );
-
-              return {
-                id: profile.id,
-                name: profile.full_name,
-                email: profile.email,
-                attendanceRate,
-                averageClockInTime: `${avgClockInTime}:00`,
-                averageHoursWorked: Math.round((totalHours / 30) * 10) / 10,
-                contractedHours: 40,
-                daysShort: Math.max(0, Math.round(30 - totalHours / 8)),
-                locationAnomalies,
-                absenceCount: absentDays,
-                lateCount: lateDays,
-              };
-            })
+        const computedStaffStats = activeStaff.map((staff) => {
+          const records = attendanceByUser.get(staff.user_id) ?? [];
+          const attendedDays = new Set(
+            records
+              .filter((record) => record.status === "present" || record.status === "late")
+              .map((record) => record.timestamp.slice(0, 10))
           );
+          const leaveAdjustedWorkingDays = expectedWorkingDays.filter((key) => !isOnApprovedLeave(staff.user_id, key));
+          const clockInMinutes = records.map((record) => {
+            const timestamp = new Date(record.timestamp);
+            return timestamp.getHours() * 60 + timestamp.getMinutes();
+          });
+          const workedHours = records
+            .filter((record) => record.clock_out)
+            .map((record) => (new Date(record.clock_out!).getTime() - new Date(record.timestamp).getTime()) / 3600000)
+            .filter((hours) => Number.isFinite(hours) && hours >= 0);
+          const contractedHours = contractHours.get(staff.user_id) ?? 8;
+          const locationAnomalies = settings
+            ? records.filter((record) => (
+                getDistanceInMeters(
+                  record.latitude,
+                  record.longitude,
+                  settings.school_latitude,
+                  settings.school_longitude
+                ) > settings.allowed_radius
+              )).length
+            : 0;
 
-          const validStaffData = staffData.filter(Boolean) as StaffStats[];
-          setStaffStats(validStaffData.length > 0 ? validStaffData : DEMO_STAFF_STATS);
+          const attendanceRate = leaveAdjustedWorkingDays.length > 0
+            ? Math.round((attendedDays.size / leaveAdjustedWorkingDays.length) * 100)
+            : 0;
 
-          // Get top performers
-          const sortedByAbsence = [...(validStaffData.length > 0 ? validStaffData : DEMO_STAFF_STATS)];
-          setTopAbsent(
-            sortedByAbsence
-              .sort((a, b) => b.absenceCount - a.absenceCount)
-              .slice(0, 5)
-          );
+          return {
+            id: staff.user_id,
+            name: staff.name,
+            email: staff.email,
+            attendanceRate,
+            averageClockInTime: formatAverageClockIn(clockInMinutes),
+            averageHoursWorked: Math.round(average(workedHours) * 10) / 10,
+            contractedHours,
+            daysShort: workedHours.filter((hours) => hours < contractedHours).length,
+            locationAnomalies,
+            absenceCount: Math.max(leaveAdjustedWorkingDays.length - attendedDays.size, 0),
+            lateCount: records.filter((record) => record.status === "late").length,
+          };
+        });
 
-          setTopLate(
-            sortedByAbsence
-              .sort((a, b) => b.lateCount - a.lateCount)
-              .slice(0, 5)
-          );
+        const byAbsence = [...computedStaffStats].sort((a, b) => b.absenceCount - a.absenceCount);
+        const byLate = [...computedStaffStats].sort((a, b) => b.lateCount - a.lateCount);
+        const byShortHours = [...computedStaffStats].sort((a, b) => b.daysShort - a.daysShort);
 
-          setTopShortHours(
-            sortedByAbsence
-              .sort((a, b) => b.daysShort - a.daysShort)
-              .slice(0, 5)
-          );
-        }
-
-        setLoading(false);
-      } catch (error) {
+        setAttendanceData(computedAttendanceData);
+        setStaffStats(computedStaffStats);
+        setTopAbsent(byAbsence.slice(0, 5));
+        setTopLate(byLate.slice(0, 5));
+        setTopShortHours(byShortHours.slice(0, 5));
+      } catch (error: any) {
         console.error("Error fetching analytics:", error);
         toast({
-          title: "Info",
-          description: "Showing demo data. Some features may be unavailable.",
-          variant: "default",
+          title: "Analytics Error",
+          description: error.message || "Unable to load analytics right now.",
+          variant: "destructive",
         });
-        // Use all demo data on error
-        setAttendanceData(DEMO_ATTENDANCE_DATA);
-        setStaffStats(DEMO_STAFF_STATS);
-        setTopAbsent(DEMO_STAFF_STATS.filter((_, i) => i < 5));
-        setTopLate(DEMO_STAFF_STATS.filter((_, i) => i < 5));
-        setTopShortHours(DEMO_STAFF_STATS.filter((_, i) => i < 5));
+        setAttendanceData([]);
+        setStaffStats([]);
+        setTopAbsent([]);
+        setTopLate([]);
+        setTopShortHours([]);
+        setLiveStats({ inOffice: 0, onBreak: 0, offSite: 0, notIn: 0, onLeave: 0 });
+      } finally {
         setLoading(false);
       }
     };
 
-    if (user) {
-      fetchAnalytics();
-    }
-  }, [user, toast]);
+    fetchAnalytics();
+  }, [toast, user]);
 
-  const liveStatsData = [
-    { name: "In Office", value: liveStats.inOffice, color: "#10b981" },
-    { name: "On Break", value: liveStats.onBreak, color: "#f59e0b" },
-    { name: "Off-site", value: liveStats.offSite, color: "#3b82f6" },
-    { name: "Not In", value: liveStats.notIn, color: "#ef4444" },
-    { name: "On Leave", value: liveStats.onLeave, color: "#8b5cf6" },
-  ];
+  const liveStatsData = useMemo(
+    () => [
+      { name: "In Office", value: liveStats.inOffice, color: COLORS[0] },
+      { name: "On Break", value: liveStats.onBreak, color: COLORS[1] },
+      { name: "Off-site", value: liveStats.offSite, color: COLORS[2] },
+      { name: "Not In", value: liveStats.notIn, color: COLORS[3] },
+      { name: "On Leave", value: liveStats.onLeave, color: COLORS[4] },
+    ],
+    [liveStats]
+  );
+
+  const hasAttendanceMetrics = attendanceData.some(
+    (entry) => entry.attendanceRate > 0 || entry.onTimeCount > 0 || entry.lateCount > 0 || entry.averageHours > 0
+  );
 
   if (loading) {
     return (
@@ -348,10 +397,9 @@ export default function Analytics() {
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
-        <p className="text-muted-foreground">School-wide attendance insights and performance metrics</p>
+        <p className="text-muted-foreground">School-wide attendance insights using your real records only.</p>
       </div>
 
-      {/* Live Stats */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         {liveStatsData.map((stat) => (
           <Card key={stat.name}>
@@ -365,7 +413,6 @@ export default function Analytics() {
         ))}
       </div>
 
-      {/* Live Status Pie Chart */}
       <Card>
         <CardHeader>
           <CardTitle>Current Staff Status</CardTitle>
@@ -380,7 +427,6 @@ export default function Analytics() {
                 labelLine={false}
                 label={({ name, value }) => `${name}: ${value}`}
                 outerRadius={80}
-                fill="#8884d8"
                 dataKey="value"
               >
                 {liveStatsData.map((entry, index) => (
@@ -393,159 +439,111 @@ export default function Analytics() {
         </CardContent>
       </Card>
 
-      {/* Attendance Trend */}
       <Card>
         <CardHeader>
           <CardTitle>Attendance Rate (Last 30 Days)</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={attendanceData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" angle={-45} textAnchor="end" height={60} />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="attendanceRate"
-                stroke="#3b82f6"
-                name="Attendance Rate (%)"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {hasAttendanceMetrics ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={attendanceData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" angle={-45} textAnchor="end" height={60} />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="attendanceRate" stroke="#3b82f6" name="Attendance Rate (%)" />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-muted-foreground">No attendance data has been recorded yet.</p>
+          )}
         </CardContent>
       </Card>
 
-      {/* On-time vs Late Breakdown */}
       <Card>
         <CardHeader>
           <CardTitle>On-Time vs Late (Last 30 Days)</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={attendanceData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" angle={-45} textAnchor="end" height={60} />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="onTimeCount" stackId="a" fill="#10b981" name="On-Time" />
-              <Bar dataKey="lateCount" stackId="a" fill="#f59e0b" name="Late" />
-            </BarChart>
-          </ResponsiveContainer>
+          {hasAttendanceMetrics ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={attendanceData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" angle={-45} textAnchor="end" height={60} />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="onTimeCount" stackId="a" fill="#10b981" name="On-Time" />
+                <Bar dataKey="lateCount" stackId="a" fill="#f59e0b" name="Late" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-muted-foreground">No attendance data has been recorded yet.</p>
+          )}
         </CardContent>
       </Card>
 
-      {/* Average Hours */}
       <Card>
         <CardHeader>
           <CardTitle>Average Hours Worked (Last 30 Days)</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={attendanceData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" angle={-45} textAnchor="end" height={60} />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="averageHours" fill="#3b82f6" name="Hours" />
-            </BarChart>
-          </ResponsiveContainer>
+          {hasAttendanceMetrics ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={attendanceData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" angle={-45} textAnchor="end" height={60} />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="averageHours" fill="#3b82f6" name="Hours" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-muted-foreground">No worked-hour data has been recorded yet.</p>
+          )}
         </CardContent>
       </Card>
 
-      {/* Top Performers */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Most Absent */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" />
-              Top 5 Most Absent
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {topAbsent.map((staff, idx) => (
-                <button
-                  key={staff.id}
-                  onClick={() => {
-                    setSelectedStaff(staff);
-                    setShowStaffDetail(true);
-                  }}
-                  className="w-full text-left p-2 rounded hover:bg-muted transition-colors"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-sm">{idx + 1}. {staff.name}</span>
-                    <Badge variant="destructive">{staff.absenceCount} days</Badge>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Most Late */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Top 5 Most Late
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {topLate.map((staff, idx) => (
-                <button
-                  key={staff.id}
-                  onClick={() => {
-                    setSelectedStaff(staff);
-                    setShowStaffDetail(true);
-                  }}
-                  className="w-full text-left p-2 rounded hover:bg-muted transition-colors"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-sm">{idx + 1}. {staff.name}</span>
-                    <Badge variant="warning">{staff.lateCount} times</Badge>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Shortest Hours */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Top 5 Shortest Hours
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {topShortHours.map((staff, idx) => (
-                <button
-                  key={staff.id}
-                  onClick={() => {
-                    setSelectedStaff(staff);
-                    setShowStaffDetail(true);
-                  }}
-                  className="w-full text-left p-2 rounded hover:bg-muted transition-colors"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-sm">{idx + 1}. {staff.name}</span>
-                    <Badge variant="outline">{staff.daysShort} days</Badge>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <RankingCard
+          title="Top 5 Most Absent"
+          icon={<AlertCircle className="h-5 w-5" />}
+          items={topAbsent}
+          badgeVariant="destructive"
+          badgeLabel={(staff) => `${staff.absenceCount} day${staff.absenceCount === 1 ? "" : "s"}`}
+          onSelect={(staff) => {
+            setSelectedStaff(staff);
+            setShowStaffDetail(true);
+          }}
+          emptyMessage="No staff records yet."
+        />
+        <RankingCard
+          title="Top 5 Most Late"
+          icon={<Clock className="h-5 w-5" />}
+          items={topLate}
+          badgeVariant="secondary"
+          badgeLabel={(staff) => `${staff.lateCount} time${staff.lateCount === 1 ? "" : "s"}`}
+          onSelect={(staff) => {
+            setSelectedStaff(staff);
+            setShowStaffDetail(true);
+          }}
+          emptyMessage="No lateness data yet."
+        />
+        <RankingCard
+          title="Top 5 Shortest Hours"
+          icon={<TrendingUp className="h-5 w-5" />}
+          items={topShortHours}
+          badgeVariant="outline"
+          badgeLabel={(staff) => `${staff.daysShort} day${staff.daysShort === 1 ? "" : "s"}`}
+          onSelect={(staff) => {
+            setSelectedStaff(staff);
+            setShowStaffDetail(true);
+          }}
+          emptyMessage="No work-hour data yet."
+        />
       </div>
 
-      {/* Staff Detail Modal */}
       <Dialog open={showStaffDetail} onOpenChange={setShowStaffDetail}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -554,7 +552,7 @@ export default function Analytics() {
               {selectedStaff?.name}
             </DialogTitle>
           </DialogHeader>
-          {selectedStaff && (
+          {selectedStaff ? (
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-muted-foreground">Email</p>
@@ -576,8 +574,8 @@ export default function Analytics() {
                   <p className="text-lg font-medium">{selectedStaff.averageHoursWorked}h</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Days Short</p>
-                  <p className="text-lg font-medium">{selectedStaff.daysShort}</p>
+                  <p className="text-sm text-muted-foreground">Contracted Hours</p>
+                  <p className="text-lg font-medium">{selectedStaff.contractedHours}h</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -590,10 +588,71 @@ export default function Analytics() {
                   <p className="text-lg font-medium">{selectedStaff.lateCount}</p>
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Absent Days</p>
+                  <p className="text-lg font-medium">{selectedStaff.absenceCount}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Short Days</p>
+                  <p className="text-lg font-medium">{selectedStaff.daysShort}</p>
+                </div>
+              </div>
             </div>
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
   );
-}
+};
+
+const RankingCard = ({
+  title,
+  icon,
+  items,
+  badgeVariant,
+  badgeLabel,
+  onSelect,
+  emptyMessage,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  items: StaffStats[];
+  badgeVariant: "destructive" | "secondary" | "outline";
+  badgeLabel: (staff: StaffStats) => string;
+  onSelect: (staff: StaffStats) => void;
+  emptyMessage: string;
+}) => (
+  <Card>
+    <CardHeader>
+      <CardTitle className="text-lg flex items-center gap-2">
+        {icon}
+        {title}
+      </CardTitle>
+    </CardHeader>
+    <CardContent>
+      {items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map((staff, index) => (
+            <button
+              key={staff.id}
+              onClick={() => onSelect(staff)}
+              className="w-full text-left p-2 rounded hover:bg-muted transition-colors"
+            >
+              <div className="flex justify-between items-center gap-3">
+                <span className="font-medium text-sm">
+                  {index + 1}. {staff.name}
+                </span>
+                <Badge variant={badgeVariant}>{badgeLabel(staff)}</Badge>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </CardContent>
+  </Card>
+);
+
+export default Analytics;
