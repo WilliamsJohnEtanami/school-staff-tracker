@@ -7,42 +7,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import NotificationsPanel from "@/components/NotificationsPanel";
-import NotificationsList from "@/components/NotificationsList";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Send, Calendar, MessageSquare } from "lucide-react";
 import { Tables } from "@/integrations/supabase/types";
 
 type LeaveRequest = Tables<"leave_requests">;
-
-const DEMO_LEAVE_REQUESTS: LeaveRequest[] = [
-  {
-    id: "demo-lr-1",
-    user_id: "00000000-0000-0000-0000-000000000001",
-    staff_name: "Jane Doe",
-    start_date: "2026-04-05",
-    end_date: "2026-04-09",
-    reason: "Medical appointment",
-    status: "pending",
-    admin_note: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: "demo-lr-2",
-    user_id: "00000000-0000-0000-0000-000000000002",
-    staff_name: "John Smith",
-    start_date: "2026-03-20",
-    end_date: "2026-03-22",
-    reason: "Family function",
-    status: "approved",
-    admin_note: "Approved, enjoy your time off.",
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
-    updated_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString(),
-  },
-];
 
 const NotificationsPage = () => {
   const { user, role } = useAuth();
@@ -62,11 +34,18 @@ const NotificationsPage = () => {
     }
 
     setSubmitting(true);
-    const { data: profile } = await supabase
+
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("name")
       .eq("user_id", user.id)
       .single();
+
+    if (profileError) {
+      setSubmitting(false);
+      toast({ title: "Error", description: profileError.message, variant: "destructive" });
+      return;
+    }
 
     const { error } = await supabase.from("leave_requests").insert({
       user_id: user.id,
@@ -246,15 +225,22 @@ const StaffRequestsAdmin = () => {
 
   useEffect(() => {
     const fetchRequests = async () => {
-      const { data } = await supabase
+      setLoading(true);
+      const { data, error } = await supabase
         .from("leave_requests")
         .select("*")
         .order("created_at", { ascending: false });
+
+      if (error) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      }
+
       setRequests(data ?? []);
       setLoading(false);
     };
+
     fetchRequests();
-  }, []);
+  }, [toast]);
 
   const updateRequestStatus = async (id: string, status: string, note?: string) => {
     const { error } = await supabase
@@ -265,7 +251,9 @@ const StaffRequestsAdmin = () => {
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      setRequests(requests.map(r => r.id === id ? { ...r, status, admin_note: note } : r));
+      setRequests((current) => current.map((request) => (
+        request.id === id ? { ...request, status, admin_note: note ?? null } : request
+      )));
       toast({ title: "Updated", description: `Request ${status}.` });
     }
   };
@@ -279,39 +267,46 @@ const StaffRequestsAdmin = () => {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {(requests.length === 0 ? DEMO_LEAVE_REQUESTS : requests).map((request) => (
-            <div key={request.id} className="border rounded-lg p-4">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <p className="font-semibold">{request.staff_name}</p>
-                  <p className="text-sm text-muted-foreground">{request.start_date} to {request.end_date}</p>
+          {requests.length === 0 ? (
+            <p className="text-muted-foreground">No leave requests have been submitted yet.</p>
+          ) : (
+            requests.map((request) => (
+              <div key={request.id} className="border rounded-lg p-4">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <p className="font-semibold">{request.staff_name}</p>
+                    <p className="text-sm text-muted-foreground">{request.start_date} to {request.end_date}</p>
+                  </div>
+                  <Badge
+                    variant={
+                      request.status === "approved"
+                        ? "default"
+                        : request.status === "rejected"
+                          ? "destructive"
+                          : "secondary"
+                    }
+                  >
+                    {request.status}
+                  </Badge>
                 </div>
-                <Badge
-                  variant={
-                    request.status === 'approved' ? 'default' :
-                    request.status === 'rejected' ? 'destructive' : 'secondary'
-                  }
-                >
-                  {request.status}
-                </Badge>
+                <p className="text-sm mb-2">Reason: {request.reason || "N/A"}</p>
+                {request.admin_note && <p className="text-sm text-muted-foreground">Admin note: {request.admin_note}</p>}
+                {request.status === "pending" && (
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => updateRequestStatus(request.id, "approved")}>
+                      Approve
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => updateRequestStatus(request.id, "rejected")}>
+                      Reject
+                    </Button>
+                  </div>
+                )}
               </div>
-              <p className="text-sm mb-2">Reason: {request.reason || 'N/A'}</p>
-              {request.admin_note && <p className="text-sm text-muted-foreground">Admin note: {request.admin_note}</p>}
-              {request.status === 'pending' && requests.length > 0 && (
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => updateRequestStatus(request.id, 'approved')}>
-                    Approve
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => updateRequestStatus(request.id, 'rejected')}>
-                    Reject
-                  </Button>
-                </div>
-              )}
-            </div>
-          ))}
+            ))
+          )}
         </div>
         <div className="mt-4 text-center">
-          <Button variant="outline" onClick={() => navigate('/admin/dashboard')}>
+          <Button variant="outline" onClick={() => navigate("/admin/dashboard")}>
             Back to Dashboard
           </Button>
         </div>
@@ -323,22 +318,31 @@ const StaffRequestsAdmin = () => {
 const StaffRequestsHistory = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
+
     const fetchRequests = async () => {
-      const { data } = await supabase
+      setLoading(true);
+      const { data, error } = await supabase
         .from("leave_requests")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
+
+      if (error) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      }
+
       setRequests(data ?? []);
       setLoading(false);
     };
+
     fetchRequests();
-  }, [user]);
+  }, [toast, user]);
 
   if (loading) return <div>Loading your requests...</div>;
 
@@ -350,23 +354,7 @@ const StaffRequestsHistory = () => {
       <CardContent>
         <div className="space-y-4">
           {requests.length === 0 ? (
-            <>
-              <p className="text-muted-foreground">No leave requests submitted yet. Demo data shown below.</p>
-              {DEMO_LEAVE_REQUESTS.map((demo) => (
-                <div key={demo.id} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">{demo.start_date} to {demo.end_date}</p>
-                    </div>
-                    <Badge variant={demo.status === 'approved' ? 'default' : demo.status === 'rejected' ? 'destructive' : 'secondary'}>
-                      {demo.status}
-                    </Badge>
-                  </div>
-                  <p className="text-sm mb-2">Reason: {demo.reason}</p>
-                  {demo.admin_note && <p className="text-sm text-muted-foreground">Admin note: {demo.admin_note}</p>}
-                </div>
-              ))}
-            </>
+            <p className="text-muted-foreground">You have not submitted any leave requests yet.</p>
           ) : (
             requests.map((request) => (
               <div key={request.id} className="border rounded-lg p-4">
@@ -376,25 +364,26 @@ const StaffRequestsHistory = () => {
                       {request.start_date} to {request.end_date}
                     </p>
                   </div>
-                  <Badge variant={
-                    request.status === "approved" ? "default" :
-                    request.status === "rejected" ? "destructive" : "secondary"
-                  }>
+                  <Badge
+                    variant={
+                      request.status === "approved"
+                        ? "default"
+                        : request.status === "rejected"
+                          ? "destructive"
+                          : "secondary"
+                    }
+                  >
                     {request.status}
                   </Badge>
                 </div>
-                {request.reason && (
-                  <p className="text-sm mb-2">Reason: {request.reason}</p>
-                )}
-                {request.admin_note && (
-                  <p className="text-sm text-muted-foreground">Admin note: {request.admin_note}</p>
-                )}
+                {request.reason && <p className="text-sm mb-2">Reason: {request.reason}</p>}
+                {request.admin_note && <p className="text-sm text-muted-foreground">Admin note: {request.admin_note}</p>}
               </div>
             ))
           )}
         </div>
         <div className="mt-6 text-center">
-          <Button variant="outline" onClick={() => navigate('/staff')}>
+          <Button variant="outline" onClick={() => navigate("/staff")}>
             Back to Dashboard
           </Button>
         </div>

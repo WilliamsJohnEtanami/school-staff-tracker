@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, GraduationCap, Eye, EyeOff, ShieldAlert } from "lucide-react";
+import { Loader2, Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import LogoMark from "@/components/LogoMark";
 
 const TEST_ADMIN = {
   email: "admin@school.edu",
@@ -210,7 +211,7 @@ const Login = () => {
       <Card className="w-full max-w-md shadow-lg border-0 shadow-primary/10">
         <CardHeader className="text-center space-y-4 pb-2">
           <div className="mx-auto bg-primary/10 p-4 rounded-full w-fit">
-            <GraduationCap className="h-10 w-10 text-primary" />
+            <LogoMark className="h-10 w-10" />
           </div>
           <CardTitle className="text-2xl font-bold text-foreground">Staff Attendance System</CardTitle>
           <CardDescription className="text-muted-foreground">

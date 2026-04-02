@@ -31,16 +31,6 @@ export type NotificationStatus = {
   updated_at: string;
 };
 
-const DEMO_NOTIFICATIONS: Notification[] = [
-  {
-    id: "demo-1",
-    title: "Welcome to Staff Tracker",
-    message: "Welcome! Your account has been created successfully. Start tracking your attendance and notifications here.",
-    created_by: null,
-    created_at: new Date().toISOString(),
-  },
-];
-
 const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boolean }) => {
   const { user } = useAuth();
   const userId = user?.id;
@@ -91,19 +81,14 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
       if (notifRes.error) {
         const errorMsg = getNotificationSystemErrorMessage(notifRes.error);
         reportSchemaError(errorMsg);
-        setNotifications(DEMO_NOTIFICATIONS.length > 0 ? DEMO_NOTIFICATIONS : []);
+        setNotifications([]);
         setStatuses({});
         setLoading(false);
         return;
       }
 
-      // Set notifications - if empty, show demo notifications
       const notifs = notifRes.data ?? [];
-      if (notifs.length === 0 && DEMO_NOTIFICATIONS.length > 0) {
-        setNotifications(DEMO_NOTIFICATIONS);
-      } else {
-        setNotifications(notifs);
-      }
+      setNotifications(notifs);
 
       // Try to fetch notification statuses - this table might not exist yet
       const statusRes = await supabase
@@ -129,7 +114,7 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
       lastSchemaToast.current = null;
     } catch (err: any) {
       reportSchemaError(`Failed to fetch notifications: ${err.message}`);
-      setNotifications(DEMO_NOTIFICATIONS);
+      setNotifications([]);
     }
 
     setLoading(false);
@@ -312,25 +297,7 @@ const NotificationsPanel = ({ enableBroadcast = false }: { enableBroadcast?: boo
         {loading ? (
           <p>Loading notifications...</p>
         ) : notifications.length === 0 ? (
-          <>
-            <p className="text-muted-foreground">No notifications yet. Showing demo notifications.</p>
-            <div className="space-y-2">
-              {DEMO_NOTIFICATIONS.map((notification) => (
-                <div key={notification.id} className="rounded-lg p-3 border border-primary/40 bg-primary/10">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold">{notification.title}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {format(new Date(notification.created_at), "MMM d, yyyy 'at' h:mm a")}
-                      </p>
-                    </div>
-                    <Badge variant="secondary">Demo</Badge>
-                  </div>
-                  <p className="mt-2 text-sm">{notification.message}</p>
-                </div>
-              ))}
-            </div>
-          </>
+          <p className="text-muted-foreground">No notifications yet.</p>
         ) : (
           <div className="space-y-2">
             {notifications.map((notification) => {

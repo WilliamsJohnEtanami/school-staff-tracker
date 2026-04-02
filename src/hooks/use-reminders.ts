@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { getFunctionErrorMessage } from "@/lib/supabase-errors";
 
 export const useReminders = () => {
   const [loading, setLoading] = useState(false);
@@ -16,13 +17,19 @@ export const useReminders = () => {
       if (error) {
         toast({
           title: "Reminder Error",
-          description: error.message,
+          description: getFunctionErrorMessage(error),
+          variant: "destructive",
+        });
+      } else if (data?.success === false && data?.error) {
+        toast({
+          title: "Reminder Error",
+          description: data.error,
           variant: "destructive",
         });
       } else {
         toast({
           title: "Reminder Sent",
-          description: data.message,
+          description: data?.message ?? "Reminder request completed.",
         });
       }
     } catch (error: any) {

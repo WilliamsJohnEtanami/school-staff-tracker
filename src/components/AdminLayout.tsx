@@ -1,11 +1,12 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, Users, Settings, FileText, LogOut, GraduationCap, CalendarOff, BarChart, Calendar, Bell, Menu, X } from "lucide-react";
+import { LayoutDashboard, Users, Settings, FileText, LogOut, CalendarOff, BarChart, Calendar, Bell, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useNotificationCount } from "@/hooks/use-notification-count";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import LogoMark from "@/components/LogoMark";
 
 const navItems = [
   { to: "/admin/analytics", icon: BarChart, label: "Analytics", end: true },
@@ -34,7 +35,9 @@ const AdminLayout = () => {
       {/* Sidebar - desktop */}
       <aside className="hidden md:flex flex-col w-64 bg-primary text-primary-foreground">
         <div className="p-6 flex items-center gap-3">
-          <GraduationCap className="h-8 w-8" />
+          <div className="rounded-xl bg-white/95 p-1 shadow-sm">
+            <LogoMark className="h-8 w-8" alt="" />
+          </div>
           <div>
             <h1 className="font-bold text-lg">Attendance</h1>
             <p className="text-xs opacity-80">Admin Panel</p>
@@ -65,7 +68,9 @@ const AdminLayout = () => {
       <div className="md:hidden">
         <div className="flex items-center justify-between p-4 bg-primary text-primary-foreground">
           <div className="flex items-center gap-3">
-            <GraduationCap className="h-6 w-6" />
+            <div className="rounded-lg bg-white/95 p-1 shadow-sm">
+              <LogoMark className="h-6 w-6" alt="" />
+            </div>
             <div>
               <h1 className="font-bold text-base">Attendance</h1>
               <p className="text-xs opacity-80">Admin Panel</p>
