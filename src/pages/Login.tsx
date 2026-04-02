@@ -10,8 +10,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, GraduationCap, Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const ADMIN_RECOVERY_EMAIL = "admin@school.edu";
-const ADMIN_RECOVERY_NAME = "Admin";
+const TEST_ADMIN = {
+  email: "admin@school.edu",
+  password: "admin123",
+  name: "Admin",
+};
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -23,7 +26,7 @@ const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const normalizedEmail = email.trim().toLowerCase();
-  const isAdminRecoveryEmail = normalizedEmail === ADMIN_RECOVERY_EMAIL;
+  const isAdminRecoveryEmail = normalizedEmail === TEST_ADMIN.email;
 
   useEffect(() => {
     if (role === "admin") navigate("/admin", { replace: true });
@@ -70,7 +73,7 @@ const Login = () => {
       if (!autoTriggered) {
         toast({
           title: "Admin Recovery Email Required",
-          description: `Use ${ADMIN_RECOVERY_EMAIL} to restore the original admin account.`,
+          description: `Use ${TEST_ADMIN.email} to restore the original admin account.`,
           variant: "destructive",
         });
       }
@@ -95,7 +98,7 @@ const Login = () => {
     try {
       const response = await supabase.functions.invoke("setup-admin", {
         body: {
-          name: ADMIN_RECOVERY_NAME,
+          name: TEST_ADMIN.name,
           email: normalizedEmail,
           password,
         },
@@ -130,6 +133,55 @@ const Login = () => {
       });
 
       return false;
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
+
+  const signInWithTestAdmin = async () => {
+    setEmail(TEST_ADMIN.email);
+    setPassword(TEST_ADMIN.password);
+    setLoading(true);
+
+    const { error } = await signIn(TEST_ADMIN.email, TEST_ADMIN.password);
+    setLoading(false);
+
+    if (!error) {
+      return;
+    }
+
+    setRecoveryLoading(true);
+
+    try {
+      const response = await supabase.functions.invoke("setup-admin", {
+        body: TEST_ADMIN,
+      });
+
+      if (response.error) {
+        const message = extractFunctionErrorMessage(response.error);
+        if (!message.includes("Admin account already exists")) {
+          throw new Error(message);
+        }
+      }
+
+      const { error: retryError } = await signIn(TEST_ADMIN.email, TEST_ADMIN.password);
+      if (retryError) {
+        throw retryError;
+      }
+
+      toast({
+        title: "Admin Test Login Ready",
+        description: "Signed in with the fixed admin account.",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to sign in with the test admin account.";
+
+      toast({
+        title: "Admin Test Login Failed",
+        description: message,
+        variant: "destructive",
+      });
     } finally {
       setRecoveryLoading(false);
     }
@@ -172,11 +224,19 @@ const Login = () => {
                 <ShieldAlert className="h-4 w-4" />
                 <AlertDescription>
                   Your account is signed in, but this Supabase project is missing your app access.
-                  If this is the school admin account, use <strong>{ADMIN_RECOVERY_EMAIL}</strong> and click
+                  If this is the school admin account, use <strong>{TEST_ADMIN.email}</strong> and click
                   Restore Admin Access.
                 </AlertDescription>
               </Alert>
             ) : null}
+
+            <Alert>
+              <ShieldAlert className="h-4 w-4" />
+              <AlertDescription>
+                Test admin access is fixed to <strong>{TEST_ADMIN.email}</strong>. Use the button below to sign in to
+                admin quickly while you recreate staff on this new Supabase project.
+              </AlertDescription>
+            </Alert>
 
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -220,6 +280,19 @@ const Login = () => {
               Sign In
             </Button>
 
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              disabled={loading || recoveryLoading}
+              onClick={() => {
+                void signInWithTestAdmin();
+              }}
+            >
+              {(loading || recoveryLoading) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Use Test Admin Login
+            </Button>
+
             {isAdminRecoveryEmail ? (
               <>
                 <Button
@@ -236,7 +309,7 @@ const Login = () => {
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
                   Use this after switching Supabase projects. It recreates or repairs the first admin account for
-                  <strong> {ADMIN_RECOVERY_EMAIL}</strong>.
+                  <strong> {TEST_ADMIN.email}</strong>.
                 </p>
               </>
             ) : null}
