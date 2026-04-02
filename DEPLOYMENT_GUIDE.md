@@ -57,7 +57,7 @@ supabase functions deploy clock-in --no-verify-jwt
 supabase functions deploy reminders
 supabase functions deploy daily-alert
 supabase functions deploy setup-admin
-supabase functions deploy manage-staff
+supabase functions deploy manage-staff --no-verify-jwt
 ```
 
 Or use auto-deployment if configured.
