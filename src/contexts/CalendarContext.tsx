@@ -13,10 +13,10 @@ type CalendarContextType = {
 };
 
 const initialCalendars: Calendar[] = [
-  { id: '1', name: 'Events', color: 'bg-blue-500' },
-  { id: '2', name: 'Holidays', color: 'bg-red-500' },
-  { id: '3', name: 'Early Closures', color: 'bg-amber-500' },
-  { id: '4', name: 'No School', color: 'bg-green-500' },
+  { id: '1', name: 'Events', color: '#3b82f6' },
+  { id: '2', name: 'Holidays', color: '#ef4444' },
+  { id: '3', name: 'Early Closures', color: '#f59e0b' },
+  { id: '4', name: 'No School', color: '#22c55e' },
 ];
 
 export const CalendarContext = React.createContext<CalendarContextType | undefined>(undefined);

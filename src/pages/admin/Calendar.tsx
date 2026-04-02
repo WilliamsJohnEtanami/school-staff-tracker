@@ -36,6 +36,7 @@ type SchoolEvent = {
   allDay: true;
   expectedHours: number | null;
   calendarId: string;
+  color: string;
 };
 
 const locales = {
@@ -81,13 +82,34 @@ const eventTypeLabel: Record<SchoolEventType, string> = {
   no_school: "No School",
 };
 
+const defaultEventColorByType: Record<SchoolEventType, string> = {
+  event: "#3b82f6",
+  holiday: "#ef4444",
+  early_closure: "#f59e0b",
+  no_school: "#22c55e",
+};
+
+const quickEventColors = [
+  "#3b82f6",
+  "#8b5cf6",
+  "#ef4444",
+  "#f59e0b",
+  "#22c55e",
+  "#14b8a6",
+  "#ec4899",
+  "#64748b",
+];
+
 const Event = ({ event }: EventProps<SchoolEvent>) => {
   const { calendars } = useCalendar();
   const calendar = calendars.find((entry) => entry.id === event.calendarId);
-  const color = calendar ? calendar.color : "bg-gray-500";
+  const color = event.color || calendar?.color || defaultEventColorByType[event.type];
 
   return (
-    <div className={`${color} p-1 rounded text-white`}>
+    <div
+      className="rounded px-2 py-1 text-white shadow-sm"
+      style={{ backgroundColor: color }}
+    >
       <span>{event.title}</span>
     </div>
   );
@@ -106,6 +128,7 @@ const CalendarPage = () => {
   const [eventType, setEventType] = React.useState<SchoolEventType>("event");
   const [eventDate, setEventDate] = React.useState("");
   const [expectedHours, setExpectedHours] = React.useState("");
+  const [eventColor, setEventColor] = React.useState(defaultEventColorByType.event);
 
   const fetchEvents = React.useCallback(async () => {
     setLoading(true);
@@ -135,6 +158,7 @@ const CalendarPage = () => {
         allDay: true,
         expectedHours: entry.expected_hours ?? null,
         calendarId: mapEventTypeToCalendarId(entry.type as SchoolEventType),
+        color: entry.color ?? defaultEventColorByType[entry.type as SchoolEventType],
       };
     });
 
@@ -157,7 +181,14 @@ const CalendarPage = () => {
     setEventType("event");
     setEventDate("");
     setExpectedHours("");
+    setEventColor(defaultEventColorByType.event);
   }, []);
+
+  const handleCreateEvent = () => {
+    resetForm();
+    setEventDate(toDateKey(new Date()));
+    setIsFormOpen(true);
+  };
 
   const handleSelectSlot = (slotInfo: SlotInfo) => {
     resetForm();
@@ -171,7 +202,16 @@ const CalendarPage = () => {
     setEventType(event.type);
     setEventDate(toDateKey(event.start));
     setExpectedHours(event.expectedHours?.toString() ?? "");
+    setEventColor(event.color || defaultEventColorByType[event.type]);
     setIsFormOpen(true);
+  };
+
+  const handleEventTypeChange = (value: SchoolEventType) => {
+    if (!eventColor || eventColor === defaultEventColorByType[eventType]) {
+      setEventColor(defaultEventColorByType[value]);
+    }
+
+    setEventType(value);
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -188,6 +228,7 @@ const CalendarPage = () => {
       event_date: eventDate,
       type: eventType,
       expected_hours: expectedHours ? Number(expectedHours) : null,
+      color: eventColor,
     };
 
     const response = selectedEvent
@@ -230,7 +271,7 @@ const CalendarPage = () => {
       <h1 className="text-3xl font-bold tracking-tight">School Calendar</h1>
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         <div className="lg:col-span-1">
-          <CalendarSidebar />
+          <CalendarSidebar onCreateEvent={handleCreateEvent} />
         </div>
         <div className="lg:col-span-3">
           <Card>
@@ -257,7 +298,15 @@ const CalendarPage = () => {
         </div>
       </div>
 
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+      <Dialog
+        open={isFormOpen}
+        onOpenChange={(open) => {
+          setIsFormOpen(open);
+          if (!open) {
+            resetForm();
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{selectedEvent ? "Edit Event" : "Add Event"}</DialogTitle>
@@ -273,7 +322,7 @@ const CalendarPage = () => {
             </div>
             <div>
               <Label htmlFor="event-type">Event Type</Label>
-              <Select value={eventType} onValueChange={(value: SchoolEventType) => setEventType(value)}>
+              <Select value={eventType} onValueChange={handleEventTypeChange}>
                 <SelectTrigger id="event-type">
                   <SelectValue />
                 </SelectTrigger>
@@ -284,6 +333,33 @@ const CalendarPage = () => {
                   <SelectItem value="no_school">{eventTypeLabel.no_school}</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-3">
+              <Label htmlFor="event-color">Event Color</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="event-color"
+                  type="color"
+                  value={eventColor}
+                  onChange={(e) => setEventColor(e.target.value)}
+                  className="h-11 w-16 cursor-pointer p-1"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {quickEventColors.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className="h-7 w-7 rounded-full border-2 transition-transform hover:scale-105"
+                      style={{
+                        backgroundColor: color,
+                        borderColor: eventColor === color ? "#0f172a" : "transparent",
+                      }}
+                      onClick={() => setEventColor(color)}
+                      aria-label={`Use ${color} for event color`}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
             <div>
               <Label htmlFor="expected-hours">Expected Hours (optional)</Label>
