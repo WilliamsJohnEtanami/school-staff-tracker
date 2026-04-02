@@ -141,7 +141,8 @@ DROP POLICY IF EXISTS "Users can insert own attendance" ON public.attendance;
 # Make sure you have the Supabase CLI installed: npm install -g supabase
 
 # Deploy the clock-in function (handles GPS validation server-side):
-npx supabase functions deploy clock-in
+# Keep gateway JWT verification disabled because the function validates the bearer token internally.
+npx supabase functions deploy clock-in --no-verify-jwt
 
 # Deploy the daily alert function (sends absent staff email daily):
 npx supabase functions deploy daily-alert

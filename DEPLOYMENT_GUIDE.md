@@ -53,7 +53,7 @@ supabase db push
 Update the reminders function and redeploy all edge functions:
 
 ```bash
-supabase functions deploy clock-in
+supabase functions deploy clock-in --no-verify-jwt
 supabase functions deploy reminders
 supabase functions deploy daily-alert
 supabase functions deploy setup-admin
