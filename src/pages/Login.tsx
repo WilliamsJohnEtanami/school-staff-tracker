@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Eye, EyeOff, ShieldAlert } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import LogoMark from "@/components/LogoMark";
 
@@ -23,7 +22,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
-  const { signIn, role, session } = useAuth();
+  const { signIn, role } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const normalizedEmail = email.trim().toLowerCase();
@@ -171,17 +170,6 @@ const Login = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {session && !role ? (
-              <Alert>
-                <ShieldAlert className="h-4 w-4" />
-                <AlertDescription>
-                  Your account is signed in, but this Supabase project is missing your app access.
-                  If this is the school admin account, use <strong>{TEST_ADMIN.email}</strong> and click
-                  Restore Admin Access.
-                </AlertDescription>
-              </Alert>
-            ) : null}
-
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -223,27 +211,6 @@ const Login = () => {
               {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Sign In
             </Button>
-
-            {isAdminRecoveryEmail ? (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  disabled={loading || recoveryLoading}
-                  onClick={() => {
-                    void restoreAdminAccess();
-                  }}
-                >
-                  {recoveryLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Restore Admin Access
-                </Button>
-                <p className="text-xs text-muted-foreground text-center">
-                  Use this after switching Supabase projects. It recreates or repairs the first admin account for
-                  <strong> {TEST_ADMIN.email}</strong>.
-                </p>
-              </>
-            ) : null}
 
             <div className="text-center">
               <Link to="/forgot-password" className="text-sm text-primary hover:underline">
