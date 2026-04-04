@@ -11,15 +11,24 @@ import {
   Menu,
   MessageSquareText,
   Send,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import AdminLeaveRequestsPanel from "@/components/AdminLeaveRequestsPanel";
 import FeedbackCenter from "@/components/FeedbackCenter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -42,9 +51,19 @@ import {
 import { cn } from "@/lib/utils";
 
 type LeaveRequest = Tables<"leave_requests">;
+type ProfileRow = Tables<"profiles">;
 type StaffSection = "notifications" | "feedback" | "requests" | "history";
 type AdminSection = "broadcast" | "notifications" | "requests" | "feedback";
 type SectionKey = StaffSection | AdminSection;
+type TargetAudience = "all" | "specific_staff" | "department" | "late_today" | "absent_today" | "shift";
+type StaffAudienceProfile = Pick<
+  ProfileRow,
+  "user_id" | "name" | "email" | "status" | "department" | "shift_name"
+>;
+type AttendanceAudienceRow = {
+  user_id: string;
+  status: string;
+};
 
 type SectionOption = {
   value: SectionKey;
@@ -84,7 +103,7 @@ const ADMIN_SECTIONS: SectionOption[] = [
   {
     value: "broadcast",
     label: "Broadcast",
-    description: "Send a message to the whole team.",
+    description: "Send a targeted message to the right staff.",
     icon: Send,
   },
   {
@@ -345,6 +364,15 @@ const NotificationInbox = ({
             <CardDescription>
               {format(new Date(selectedNotification.created_at), "EEEE, MMMM d, yyyy 'at' h:mm a")}
             </CardDescription>
+            {selectedNotification.audience_summary ? (
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <Badge variant="outline">{selectedNotification.audience_summary}</Badge>
+                <span>
+                  {selectedNotification.recipient_count} recipient
+                  {selectedNotification.recipient_count === 1 ? "" : "s"}
+                </span>
+              </div>
+            ) : null}
           </div>
         </CardHeader>
 
@@ -430,6 +458,12 @@ const NotificationInbox = ({
                     <p className="mt-1 truncate text-sm text-muted-foreground">
                       {notification.message}
                     </p>
+                    {notification.audience_summary ? (
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        Sent to {notification.audience_summary} • {notification.recipient_count} recipient
+                        {notification.recipient_count === 1 ? "" : "s"}
+                      </p>
+                    ) : null}
                   </div>
 
                   {!notification.read ? <span className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-primary" /> : null}
@@ -443,13 +477,211 @@ const NotificationInbox = ({
   );
 };
 
+const normalizeText = (value: string | null | undefined) => (value ?? "").trim().toLowerCase();
+
 const BroadcastComposer = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [audienceType, setAudienceType] = useState<TargetAudience>("all");
+  const [staffProfiles, setStaffProfiles] = useState<StaffAudienceProfile[]>([]);
+  const [audienceLoading, setAudienceLoading] = useState(true);
+  const [staffSearch, setStaffSearch] = useState("");
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [selectedShifts, setSelectedShifts] = useState<string[]>([]);
+  const [lateTodayIds, setLateTodayIds] = useState<string[]>([]);
+  const [absentTodayIds, setAbsentTodayIds] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [schemaError, setSchemaError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    let mounted = true;
+
+    const fetchAudienceData = async () => {
+      setAudienceLoading(true);
+
+      const today = format(new Date(), "yyyy-MM-dd");
+
+      const [profilesRes, rolesRes, attendanceRes, leaveRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("user_id, name, email, status, department, shift_name")
+          .eq("status", "active")
+          .order("name"),
+        supabase.from("user_roles").select("user_id").eq("role", "staff"),
+        supabase
+          .from("attendance")
+          .select("user_id, status")
+          .gte("timestamp", `${today}T00:00:00`)
+          .lte("timestamp", `${today}T23:59:59`),
+        supabase
+          .from("leave_requests")
+          .select("user_id")
+          .eq("status", "approved")
+          .lte("start_date", today)
+          .gte("end_date", today),
+      ]);
+
+      if (!mounted) {
+        return;
+      }
+
+      if (profilesRes.error || rolesRes.error || attendanceRes.error || leaveRes.error) {
+        const firstError = profilesRes.error || rolesRes.error || attendanceRes.error || leaveRes.error;
+        toast({
+          title: "Audience load failed",
+          description: firstError?.message ?? "Unable to load staff targeting data.",
+          variant: "destructive",
+        });
+        setStaffProfiles([]);
+        setLateTodayIds([]);
+        setAbsentTodayIds([]);
+        setAudienceLoading(false);
+        return;
+      }
+
+      const staffRoleIds = new Set((rolesRes.data ?? []).map((row) => row.user_id));
+      const activeStaff = ((profilesRes.data ?? []) as StaffAudienceProfile[]).filter((profile) =>
+        staffRoleIds.has(profile.user_id)
+      );
+      const lateIds = Array.from(
+        new Set(
+          ((attendanceRes.data ?? []) as AttendanceAudienceRow[])
+            .filter((row) => row.status === "late")
+            .map((row) => row.user_id)
+        )
+      );
+      const clockedInIds = new Set(
+        ((attendanceRes.data ?? []) as AttendanceAudienceRow[])
+          .filter((row) => row.status === "present" || row.status === "late")
+          .map((row) => row.user_id)
+      );
+      const onLeaveIds = new Set((leaveRes.data ?? []).map((row) => row.user_id));
+      const absentIds = activeStaff
+        .filter((profile) => !clockedInIds.has(profile.user_id) && !onLeaveIds.has(profile.user_id))
+        .map((profile) => profile.user_id);
+
+      setStaffProfiles(activeStaff);
+      setLateTodayIds(lateIds);
+      setAbsentTodayIds(absentIds);
+      setAudienceLoading(false);
+    };
+
+    void fetchAudienceData();
+
+    return () => {
+      mounted = false;
+    };
+  }, [toast, user?.id]);
+
+  const departmentOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          staffProfiles
+            .map((profile) => profile.department?.trim())
+            .filter((value): value is string => Boolean(value))
+        )
+      ).sort((left, right) => left.localeCompare(right)),
+    [staffProfiles]
+  );
+
+  const shiftOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          staffProfiles
+            .map((profile) => profile.shift_name?.trim())
+            .filter((value): value is string => Boolean(value))
+        )
+      ).sort((left, right) => left.localeCompare(right)),
+    [staffProfiles]
+  );
+
+  const filteredStaffProfiles = useMemo(() => {
+    if (!staffSearch.trim()) {
+      return staffProfiles;
+    }
+
+    const query = staffSearch.trim().toLowerCase();
+    return staffProfiles.filter((profile) => {
+      const searchable = [
+        profile.name,
+        profile.email,
+        profile.department ?? "",
+        profile.shift_name ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(query);
+    });
+  }, [staffProfiles, staffSearch]);
+
+  const previewRecipients = useMemo(() => {
+    if (audienceType === "all") {
+      return staffProfiles;
+    }
+
+    if (audienceType === "specific_staff") {
+      const selected = new Set(selectedStaffIds);
+      return staffProfiles.filter((profile) => selected.has(profile.user_id));
+    }
+
+    if (audienceType === "department") {
+      const selected = new Set(selectedDepartments.map(normalizeText));
+      return staffProfiles.filter((profile) => selected.has(normalizeText(profile.department)));
+    }
+
+    if (audienceType === "shift") {
+      const selected = new Set(selectedShifts.map(normalizeText));
+      return staffProfiles.filter((profile) => selected.has(normalizeText(profile.shift_name)));
+    }
+
+    if (audienceType === "late_today") {
+      const selected = new Set(lateTodayIds);
+      return staffProfiles.filter((profile) => selected.has(profile.user_id));
+    }
+
+    const selected = new Set(absentTodayIds);
+    return staffProfiles.filter((profile) => selected.has(profile.user_id));
+  }, [
+    absentTodayIds,
+    audienceType,
+    lateTodayIds,
+    selectedDepartments,
+    selectedShifts,
+    selectedStaffIds,
+    staffProfiles,
+  ]);
+
+  const audienceSummary = useMemo(() => {
+    if (audienceType === "all") return "All active staff";
+    if (audienceType === "specific_staff") return "Selected staff members";
+    if (audienceType === "department") return "Selected departments";
+    if (audienceType === "shift") return "Selected shifts";
+    if (audienceType === "late_today") return "Staff marked late today";
+    return "Staff absent today";
+  }, [audienceType]);
+
+  const toggleSelection = (values: string[], nextValue: string) =>
+    values.includes(nextValue)
+      ? values.filter((value) => value !== nextValue)
+      : [...values, nextValue];
+
+  const resetTargeting = () => {
+    setAudienceType("all");
+    setSelectedStaffIds([]);
+    setSelectedDepartments([]);
+    setSelectedShifts([]);
+    setStaffSearch("");
+  };
 
   const sendBroadcast = async () => {
     if (!user?.id) {
@@ -462,6 +694,11 @@ const BroadcastComposer = () => {
       return;
     }
 
+    if (previewRecipients.length === 0) {
+      toast({ title: "No matching staff", description: "Choose an audience with at least one recipient.", variant: "destructive" });
+      return;
+    }
+
     setSending(true);
     setSchemaError(null);
 
@@ -469,69 +706,79 @@ const BroadcastComposer = () => {
       body: {
         title: title.trim(),
         message: message.trim(),
+        audienceType,
+        staffUserIds: selectedStaffIds,
+        departments: selectedDepartments,
+        shifts: selectedShifts,
       },
     });
+
+    setSending(false);
 
     if (error) {
       const errorMessage = getFunctionErrorMessage(error);
       const lowerMessage = errorMessage.toLowerCase();
-
-      if (lowerMessage.includes("edge function")) {
-        const fallbackInsert = await supabase.from("notifications").insert({
-          title: title.trim(),
-          message: message.trim(),
-          created_by: user.id,
-        });
-
-        setSending(false);
-
-        if (!fallbackInsert.error) {
-          setTitle("");
-          setMessage("");
-          toast({ title: "Broadcast Sent", description: "All staff will see this message in notifications." });
-          return;
-        }
-
-        if (isMissingPublicTableError(fallbackInsert.error, "notifications")) {
-          setSchemaError(getNotificationSystemErrorMessage(fallbackInsert.error));
-        } else {
-          toast({ title: "Error", description: fallbackInsert.error.message, variant: "destructive" });
-        }
-        return;
-      }
-
-      setSending(false);
+      const schemaLikeError = { message: errorMessage };
 
       if (
-        isMissingPublicTableError(error, "notifications") ||
-        lowerMessage.includes("notifications table") ||
+        isMissingPublicTableError(schemaLikeError, "notifications") ||
+        isMissingPublicTableError(schemaLikeError, "notification_recipients") ||
+        lowerMessage.includes("notification") ||
         lowerMessage.includes("schema cache") ||
         lowerMessage.includes("supabase db push")
       ) {
-        setSchemaError(errorMessage);
+        setSchemaError(getNotificationSystemErrorMessage(schemaLikeError));
       } else {
         toast({ title: "Error", description: errorMessage, variant: "destructive" });
       }
       return;
     }
 
-    setSending(false);
     setTitle("");
     setMessage("");
-    toast({ title: "Broadcast Sent", description: data?.message ?? "All staff will see this message in notifications." });
+    resetTargeting();
+    toast({
+      title: "Notification Sent",
+      description:
+        data?.message ??
+        `Your notification has been sent to ${previewRecipients.length} staff member${previewRecipients.length === 1 ? "" : "s"}.`,
+    });
   };
 
   return (
     <Card className="border-0 shadow-sm">
       <CardHeader>
-        <CardTitle>Broadcast Message</CardTitle>
+        <CardTitle>Targeted Notification</CardTitle>
         <CardDescription>
-          Send a school-wide message to staff. Notifications themselves stay in the Notifications tab.
+          Send a message to all staff, selected staff, departments, late staff, absent staff, or everyone on a chosen shift.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
         {schemaError ? <p className="text-sm text-destructive">{schemaError}</p> : null}
+
+        {audienceLoading ? (
+          <div className="flex items-center justify-center rounded-2xl border p-6">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          </div>
+        ) : null}
+
+        <div className="space-y-2">
+          <Label htmlFor="audience-type">Audience</Label>
+          <Select value={audienceType} onValueChange={(value: TargetAudience) => setAudienceType(value)}>
+            <SelectTrigger id="audience-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All active staff</SelectItem>
+              <SelectItem value="specific_staff">Specific staff</SelectItem>
+              <SelectItem value="department">Department</SelectItem>
+              <SelectItem value="late_today">Late staff only</SelectItem>
+              <SelectItem value="absent_today">Absent staff only</SelectItem>
+              <SelectItem value="shift">Shift</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
         <div className="space-y-2">
           <Label htmlFor="broadcast-title">Title</Label>
@@ -554,9 +801,121 @@ const BroadcastComposer = () => {
           />
         </div>
 
-        <Button onClick={sendBroadcast} disabled={sending}>
+        {audienceType === "specific_staff" ? (
+          <div className="space-y-3 rounded-2xl border p-4">
+            <div className="space-y-2">
+              <Label htmlFor="staff-search">Choose Staff</Label>
+              <Input
+                id="staff-search"
+                placeholder="Search by name, email, department, or shift"
+                value={staffSearch}
+                onChange={(event) => setStaffSearch(event.target.value)}
+              />
+            </div>
+            <div className="max-h-56 space-y-2 overflow-y-auto">
+              {filteredStaffProfiles.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No staff matched your search.</p>
+              ) : (
+                filteredStaffProfiles.map((profile) => (
+                  <label
+                    key={profile.user_id}
+                    className="flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2"
+                  >
+                    <Checkbox
+                      checked={selectedStaffIds.includes(profile.user_id)}
+                      onCheckedChange={() => setSelectedStaffIds((current) => toggleSelection(current, profile.user_id))}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{profile.name}</p>
+                      <p className="text-xs text-muted-foreground">{profile.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {profile.department || "No department"} • {profile.shift_name || "No shift"}
+                      </p>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {audienceType === "department" ? (
+          <div className="space-y-3 rounded-2xl border p-4">
+            <Label>Select Departments</Label>
+            {departmentOptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No departments are configured yet. Add them in staff profiles first.
+              </p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {departmentOptions.map((department) => (
+                  <label key={department} className="flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2">
+                    <Checkbox
+                      checked={selectedDepartments.includes(department)}
+                      onCheckedChange={() =>
+                        setSelectedDepartments((current) => toggleSelection(current, department))
+                      }
+                    />
+                    <span className="text-sm">{department}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {audienceType === "shift" ? (
+          <div className="space-y-3 rounded-2xl border p-4">
+            <Label>Select Shifts</Label>
+            {shiftOptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No shifts are configured yet. Add them in staff profiles first.
+              </p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {shiftOptions.map((shift) => (
+                  <label key={shift} className="flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2">
+                    <Checkbox
+                      checked={selectedShifts.includes(shift)}
+                      onCheckedChange={() => setSelectedShifts((current) => toggleSelection(current, shift))}
+                    />
+                    <span className="text-sm">{shift}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        <div className="rounded-2xl border bg-muted/20 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">{audienceSummary}</p>
+              <p className="text-sm text-muted-foreground">
+                {previewRecipients.length} recipient{previewRecipients.length === 1 ? "" : "s"} matched right now.
+              </p>
+            </div>
+            <Badge variant="secondary" className="gap-1">
+              <Users className="h-3.5 w-3.5" />
+              {previewRecipients.length}
+            </Badge>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {previewRecipients.slice(0, 6).map((profile) => (
+              <Badge key={profile.user_id} variant="outline">
+                {profile.name}
+              </Badge>
+            ))}
+            {previewRecipients.length > 6 ? (
+              <Badge variant="outline">+{previewRecipients.length - 6} more</Badge>
+            ) : null}
+          </div>
+        </div>
+
+        <Button onClick={sendBroadcast} disabled={sending || audienceLoading}>
           {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-          Send Broadcast
+          Send Notification
         </Button>
       </CardContent>
     </Card>

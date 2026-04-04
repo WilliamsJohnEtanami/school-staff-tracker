@@ -311,26 +311,64 @@ export type Database = {
           },
         ]
       }
+      notification_recipients: {
+        Row: {
+          created_at: string
+          id: string
+          notification_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notification_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notification_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_recipients_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
+          audience_summary: string | null
+          audience_type: string
           created_at: string
           created_by: string | null
           id: string
           message: string
+          recipient_count: number
           title: string
         }
         Insert: {
+          audience_summary?: string | null
+          audience_type?: string
           created_at?: string
           created_by?: string | null
           id?: string
           message: string
+          recipient_count?: number
           title: string
         }
         Update: {
+          audience_summary?: string | null
+          audience_type?: string
           created_at?: string
           created_by?: string | null
           id?: string
           message?: string
+          recipient_count?: number
           title?: string
         }
         Relationships: []
@@ -338,27 +376,33 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          department: string | null
           email: string
           id: string
           name: string
+          shift_name: string | null
           status: string
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          department?: string | null
           email: string
           id?: string
           name: string
+          shift_name?: string | null
           status?: string
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
+          department?: string | null
           email?: string
           id?: string
           name?: string
+          shift_name?: string | null
           status?: string
           updated_at?: string
           user_id?: string

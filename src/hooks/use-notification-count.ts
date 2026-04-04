@@ -55,6 +55,11 @@ export const useNotificationCount = () => {
     const channel = supabase
       .channel("notifications_count")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, fetchUnreadCount)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notification_recipients", filter: `user_id=eq.${user.id}` },
+        fetchUnreadCount
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "notification_statuses" }, fetchUnreadCount)
       .subscribe();
 
