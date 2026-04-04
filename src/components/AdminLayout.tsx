@@ -31,9 +31,9 @@ const AdminLayout = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-background">
+    <div className="min-h-screen flex flex-col bg-background md:h-screen md:flex-row md:overflow-hidden">
       {/* Sidebar - desktop */}
-      <aside className="hidden md:flex flex-col w-64 bg-primary text-primary-foreground">
+      <aside className="hidden w-64 shrink-0 flex-col bg-primary text-primary-foreground md:flex md:h-screen">
         <div className="p-6 flex items-center gap-3">
           <div className="rounded-xl bg-white/95 p-1 shadow-sm">
             <LogoMark className="h-8 w-8" alt="" />
@@ -43,7 +43,7 @@ const AdminLayout = () => {
             <p className="text-xs opacity-80">Admin Panel</p>
           </div>
         </div>
-        <nav className="flex-1 px-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto px-3 space-y-1">
           {navItems.map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => cn("flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors", isActive ? "bg-primary-foreground/20 font-medium" : "hover:bg-primary-foreground/10 opacity-80")}>
               <item.icon className="h-5 w-5" />
@@ -113,7 +113,7 @@ const AdminLayout = () => {
         </div>
       </div>
 
-      <main className="flex-1 overflow-auto">
+      <main className="min-h-0 flex-1 overflow-auto">
         <Outlet />
       </main>
     </div>
