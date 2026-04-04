@@ -28,6 +28,8 @@ const StaffManagement = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [department, setDepartment] = useState("");
+  const [shiftName, setShiftName] = useState("");
   const [adding, setAdding] = useState(false);
   const [staffToDelete, setStaffToDelete] = useState<any | null>(null);
   const [deleteConfirmationName, setDeleteConfirmationName] = useState("");
@@ -52,7 +54,7 @@ const StaffManagement = () => {
     e.preventDefault();
     setAdding(true);
     const res = await supabase.functions.invoke("manage-staff", {
-      body: { action: "create", name, email, password },
+      body: { action: "create", name, email, password, department, shiftName },
     });
 
     setAdding(false);
@@ -60,7 +62,7 @@ const StaffManagement = () => {
       toast({ title: "Error", description: getFunctionErrorMessage(res.error), variant: "destructive" });
     } else {
       toast({ title: "Staff Added", description: `${name} has been added successfully.` });
-      setName(""); setEmail(""); setPassword("");
+      setName(""); setEmail(""); setPassword(""); setDepartment(""); setShiftName("");
       setDialogOpen(false);
       fetchStaff();
     }
@@ -126,6 +128,8 @@ const StaffManagement = () => {
               <div><Label>Full Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} required /></div>
               <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
               <div><Label>Password</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} /></div>
+              <div><Label>Department</Label><Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="Optional, e.g. Science" /></div>
+              <div><Label>Shift</Label><Input value={shiftName} onChange={(e) => setShiftName(e.target.value)} placeholder="Optional, e.g. Morning" /></div>
               <Button type="submit" disabled={adding} className="w-full">
                 {adding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Add Staff
               </Button>
@@ -145,6 +149,8 @@ const StaffManagement = () => {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Shift</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -158,6 +164,8 @@ const StaffManagement = () => {
                         </Link>
                       </TableCell>
                       <TableCell>{s.email}</TableCell>
+                      <TableCell>{s.department || "—"}</TableCell>
+                      <TableCell>{s.shift_name || "—"}</TableCell>
                       <TableCell>
                         <Badge variant={s.status === "active" ? "default" : "secondary"} className={s.status === "active" ? "bg-accent text-accent-foreground" : ""}>
                           {s.status}

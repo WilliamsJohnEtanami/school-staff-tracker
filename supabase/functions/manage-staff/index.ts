@@ -104,7 +104,9 @@ const ensureStaffRecords = async (
   supabaseAdmin: ReturnType<typeof createClient>,
   userId: string,
   name: string,
-  email: string
+  email: string,
+  department: string | null,
+  shiftName: string | null
 ) => {
   const { firstName, lastName } = splitName(name);
 
@@ -114,6 +116,8 @@ const ensureStaffRecords = async (
       name,
       email,
       status: "active",
+      department,
+      shift_name: shiftName,
     },
     { onConflict: "user_id" }
   );
@@ -238,10 +242,12 @@ Deno.serve(async (req) => {
     const supabaseAdmin = getSupabaseAdmin();
     await requireAdmin(req, supabaseAdmin);
 
-    const { action, name, email, password, userId, confirmName } = await req.json();
+    const { action, name, email, password, userId, confirmName, department, shiftName } = await req.json();
     const normalizedEmail = normalizeEmail(email);
     const trimmedName = typeof name === "string" ? name.trim() : "";
     const plainPassword = typeof password === "string" ? password : "";
+    const trimmedDepartment = typeof department === "string" ? department.trim() : "";
+    const trimmedShiftName = typeof shiftName === "string" ? shiftName.trim() : "";
 
     if (action === "create") {
       if (!trimmedName || !normalizedEmail || !plainPassword) {
@@ -300,7 +306,14 @@ Deno.serve(async (req) => {
         resolvedUserId = newUser.user.id;
       }
 
-      await ensureStaffRecords(supabaseAdmin, resolvedUserId, trimmedName, normalizedEmail);
+      await ensureStaffRecords(
+        supabaseAdmin,
+        resolvedUserId,
+        trimmedName,
+        normalizedEmail,
+        trimmedDepartment || null,
+        trimmedShiftName || null
+      );
 
       return jsonResponse({ success: true, recovered, user_id: resolvedUserId });
     }

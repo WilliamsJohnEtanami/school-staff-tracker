@@ -64,6 +64,10 @@ export const getNotificationSystemErrorMessage = (error: SupabaseErrorLike) => {
     return "Notifications are not available yet because the database schema is missing or stale. Run `supabase db push` to create the tables and reload the schema cache.";
   }
 
+  if (isMissingPublicTableError(error, "notification_recipients")) {
+    return "Notification delivery targeting is not available yet. Run `supabase db push` to create the recipient-mapping table.";
+  }
+
   if (isMissingPublicTableError(error, "notification_statuses")) {
     return "Notification read-status tracking is not available yet. Run `supabase db push` to create the missing notification tables.";
   }

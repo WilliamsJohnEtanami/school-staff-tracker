@@ -7,11 +7,14 @@ import {
 } from "@/lib/supabase-errors";
 
 type NotificationRow = {
+  audience_summary: string | null;
+  audience_type: string;
   id: string;
   title: string;
   message: string;
   created_by: string | null;
   created_at: string;
+  recipient_count: number;
 };
 
 export type NotificationFeedItem = NotificationRow & {
@@ -42,7 +45,7 @@ export const useNotifications = (userIdOverride?: string | null) => {
       const [notifRes, statusRes] = await Promise.all([
         supabase
           .from("notifications")
-          .select("id,title,message,created_by,created_at")
+          .select("id,title,message,created_by,created_at,audience_type,audience_summary,recipient_count")
           .order("created_at", { ascending: false }),
         supabase
           .from("notification_statuses")
@@ -155,6 +158,16 @@ export const useNotifications = (userIdOverride?: string | null) => {
     const channel = supabase
       .channel(`notifications_feed_${userId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, fetchNotifications)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notification_recipients",
+          filter: `user_id=eq.${userId}`,
+        },
+        fetchNotifications
+      )
       .on(
         "postgres_changes",
         {
