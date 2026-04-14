@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, Users, Settings, FileText, LogOut, CalendarOff, BarChart, Calendar, Bell, Menu, X } from "lucide-react";
+import { LayoutDashboard, Calendar, Bell, CalendarOff, History, LogOut, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useNotificationCount } from "@/hooks/use-notification-count";
@@ -9,17 +9,14 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import LogoMark from "@/components/LogoMark";
 
 const navItems = [
-  { to: "/admin/analytics", icon: BarChart, label: "Analytics", end: true },
-  { to: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/admin/staff", icon: Users, label: "Staff" },
-  { to: "/admin/calendar", icon: Calendar, label: "School Calendar" },
-  { to: "/admin/leave", icon: CalendarOff, label: "Leave" },
-  { to: "/admin/reports", icon: FileText, label: "Reports" },
-  { to: "/admin/notifications", icon: Bell, label: "Notifications" },
-  { to: "/admin/settings", icon: Settings, label: "Settings" },
+  { to: "/staff", icon: LayoutDashboard, label: "Dashboard", end: true },
+  { to: "/staff/calendar", icon: Calendar, label: "Calendar" },
+  { to: "/staff/notifications", icon: Bell, label: "Notifications" },
+  { to: "/staff/leave", icon: CalendarOff, label: "Leave" },
+  { to: "/staff/history", icon: History, label: "My History" },
 ];
 
-const AdminLayout = () => {
+const StaffLayout = () => {
   const { signOut, profile } = useAuth();
   const navigate = useNavigate();
   const { unreadCount } = useNotificationCount();
@@ -45,9 +42,9 @@ const AdminLayout = () => {
             )
           }
         >
-          <item.icon className="h-5 w-5" />
+          <item.icon className="h-5 w-5 shrink-0" />
           {item.label}
-          {item.to === "/admin/notifications" && unreadCount > 0 && (
+          {item.to === "/staff/notifications" && unreadCount > 0 && (
             <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-2 py-0.5">
               {unreadCount}
             </span>
@@ -67,7 +64,7 @@ const AdminLayout = () => {
           </div>
           <div>
             <h1 className="font-bold text-lg">Attendance</h1>
-            <p className="text-xs opacity-80">Admin Panel</p>
+            <p className="text-xs opacity-80">Staff Portal</p>
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 space-y-1">
@@ -75,7 +72,12 @@ const AdminLayout = () => {
         </nav>
         <div className="p-4 border-t border-primary-foreground/20">
           <p className="text-sm opacity-80 mb-2 truncate">{profile?.name}</p>
-          <Button variant="ghost" size="sm" onClick={handleSignOut} className="w-full justify-start text-primary-foreground hover:bg-primary-foreground/10">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSignOut}
+            className="w-full justify-start text-primary-foreground hover:bg-primary-foreground/10"
+          >
             <LogOut className="h-4 w-4 mr-2" /> Sign Out
           </Button>
         </div>
@@ -90,7 +92,7 @@ const AdminLayout = () => {
             </div>
             <div>
               <h1 className="font-bold text-base">Attendance</h1>
-              <p className="text-xs opacity-80">Admin Panel</p>
+              <p className="text-xs opacity-80">Staff Portal</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -106,7 +108,12 @@ const AdminLayout = () => {
               <SheetContent side="right" className="w-64 bg-primary text-primary-foreground border-primary-foreground/20">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="font-semibold">Menu</h2>
-                  <Button variant="ghost" size="sm" onClick={() => setMobileMenuOpen(false)} className="text-primary-foreground hover:bg-primary-foreground/10">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="text-primary-foreground hover:bg-primary-foreground/10"
+                  >
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
@@ -115,7 +122,12 @@ const AdminLayout = () => {
                 </nav>
                 <div className="mt-6 pt-4 border-t border-primary-foreground/20">
                   <p className="text-sm opacity-80 mb-2 truncate">{profile?.name}</p>
-                  <Button variant="ghost" size="sm" onClick={handleSignOut} className="w-full justify-start text-primary-foreground hover:bg-primary-foreground/10">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSignOut}
+                    className="w-full justify-start text-primary-foreground hover:bg-primary-foreground/10"
+                  >
                     <LogOut className="h-4 w-4 mr-2" /> Sign Out
                   </Button>
                 </div>
@@ -132,4 +144,4 @@ const AdminLayout = () => {
   );
 };
 
-export default AdminLayout;
+export default StaffLayout;

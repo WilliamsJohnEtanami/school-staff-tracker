@@ -13,6 +13,9 @@ import Login from "@/pages/Login";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import StaffDashboard from "@/pages/StaffDashboard";
+import StaffLayout from "@/components/StaffLayout";
+import StaffCalendar from "@/pages/staff/Calendar";
+import StaffHistory from "@/pages/staff/History";
 import AdminLayout from "@/components/AdminLayout";
 import AdminDashboard from "@/pages/admin/Dashboard";
 import Analytics from "@/pages/admin/Analytics";
@@ -47,10 +50,16 @@ const App = () => (
               <Route path="/staff" element={
                 <ProtectedRoute requiredRole="staff">
                   <LocationGate>
-                    <StaffDashboard />
+                    <StaffLayout />
                   </LocationGate>
                 </ProtectedRoute>
-              } />
+              }>
+                <Route index element={<StaffDashboard />} />
+                <Route path="calendar" element={<StaffCalendar />} />
+                <Route path="history" element={<StaffHistory />} />
+                <Route path="notifications" element={<NotificationsPage />} />
+                <Route path="leave" element={<NotificationsPage />} />
+              </Route>
               <Route path="/admin" element={
                 <ProtectedRoute requiredRole="admin">
                   <CalendarProvider>
@@ -67,12 +76,9 @@ const App = () => (
                 <Route path="reports" element={<Reports />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="leave" element={<LeaveManagement />} />
+                <Route path="notifications" element={<NotificationsPage />} />
               </Route>
-              <Route path="/notifications" element={
-                <ProtectedRoute>
-                  <NotificationsPage />
-                </ProtectedRoute>
-              } />
+
               <Route path="*" element={<NotFound />} />
             </Routes>
           </LocationProvider>

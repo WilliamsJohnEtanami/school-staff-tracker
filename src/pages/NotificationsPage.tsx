@@ -8,7 +8,6 @@ import {
   FilePlus2,
   History,
   Loader2,
-  Menu,
   MessageSquareText,
   Send,
   Users,
@@ -22,32 +21,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useNotifications } from "@/hooks/use-notifications";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
-import {
-  getFunctionErrorMessage,
-  getNotificationSystemErrorMessage,
-  isMissingPublicTableError,
-} from "@/lib/supabase-errors";
+import { getFunctionErrorMessage, getNotificationSystemErrorMessage, isMissingPublicTableError } from "@/lib/supabase-errors";
 import { cn } from "@/lib/utils";
 
 type LeaveRequest = Tables<"leave_requests">;
@@ -140,165 +121,105 @@ const NotificationsPage = () => {
   const { role } = useAuth();
   const isAdmin = role === "admin";
   const [searchParams, setSearchParams] = useSearchParams();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { notifications } = useNotifications();
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   const sectionOptions = isAdmin ? ADMIN_SECTIONS : STAFF_SECTIONS;
   const activeSection = getValidSection(searchParams.get("view"), isAdmin);
   const selectedNotificationId = searchParams.get("notification");
-  const activeSectionMeta = sectionOptions.find((section) => section.value === activeSection) ?? sectionOptions[0];
 
   const setView = (section: SectionKey) => {
     const next = new URLSearchParams(searchParams);
     next.set("view", section);
-
-    if (section !== "notifications") {
-      next.delete("notification");
-    }
-
+    if (section !== "notifications") next.delete("notification");
     setSearchParams(next, { replace: true });
-    setMobileMenuOpen(false);
   };
 
   const selectNotification = (notificationId: string | null) => {
     const next = new URLSearchParams(searchParams);
     next.set("view", "notifications");
-
-    if (notificationId) {
-      next.set("notification", notificationId);
-    } else {
-      next.delete("notification");
-    }
-
+    if (notificationId) next.set("notification", notificationId);
+    else next.delete("notification");
     setSearchParams(next, { replace: true });
   };
 
   return (
-    <div className="p-4 md:p-6">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{isAdmin ? "Admin Notifications" : "Notifications"}</h1>
-          <p className="text-sm text-muted-foreground">
-            {isAdmin
-              ? "Manage broadcasts, leave requests, and direct staff message conversations."
-              : "Read updates, message admin, submit requests, and keep track of your leave history."}
-          </p>
-        </div>
+    <div className="flex flex-col h-full">
+      {/* Page header */}
+      <div className="px-4 md:px-6 pt-6 pb-0">
+        <h1 className="text-2xl font-bold">{isAdmin ? "Notifications" : "Notifications"}</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {isAdmin
+            ? "Broadcast messages, review requests and staff feedback."
+            : "Stay updated, send requests and chat with admin."}
+        </p>
+      </div>
 
-        <div className="flex items-center gap-2">
-          {!isAdmin ? (
-            <Button variant="outline" size="sm" onClick={() => setView("requests")} className="hidden sm:inline-flex">
-              <FilePlus2 className="mr-2 h-4 w-4" />
-              Make Request
-            </Button>
-          ) : null}
-
-          <Link
-            to={isAdmin ? "/admin/dashboard" : "/staff"}
-            className="inline-flex h-9 items-center justify-center rounded-md border border-input px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            Go Back
-          </Link>
+      {/* Pill tab bar */}
+      <div className="px-4 md:px-6 pt-4 pb-0">
+        <div className="flex gap-1 bg-muted rounded-xl p-1 overflow-x-auto scrollbar-none">
+          {sectionOptions.map((section) => {
+            const isActive = activeSection === section.value;
+            const showBadge = section.value === "notifications" && unreadCount > 0;
+            return (
+              <button
+                key={section.value}
+                onClick={() => setView(section.value)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all flex-1 justify-center",
+                  isActive
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <section.icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden sm:inline">{section.label}</span>
+                <span className="sm:hidden">{section.label.split(" ")[0]}</span>
+                {showBadge && (
+                  <span className="ml-0.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="mb-6 hidden gap-2 md:grid md:grid-cols-3">
-        {sectionOptions.map((section) => (
-          <Button
-            key={section.value}
-            variant={activeSection === section.value ? "default" : "outline"}
-            className="h-auto justify-start gap-3 px-4 py-3 text-left"
-            onClick={() => setView(section.value)}
-          >
-            <section.icon className="h-4 w-4 shrink-0" />
-            <div className="min-w-0">
-              <div className="font-medium">{section.label}</div>
-              <div className="truncate text-xs opacity-80">{section.description}</div>
-            </div>
-          </Button>
-        ))}
+      {/* Content */}
+      <div className="flex-1 overflow-auto px-4 md:px-6 py-4">
+        {isAdmin ? (
+          <>
+            {activeSection === "broadcast" ? <BroadcastComposer /> : null}
+            {activeSection === "notifications" ? (
+              <NotificationInbox
+                title="Admin Inbox"
+                emptyMessage="No notifications have been sent yet."
+                selectedNotificationId={selectedNotificationId}
+                onSelectNotification={selectNotification}
+              />
+            ) : null}
+            {activeSection === "requests" ? <AdminLeaveRequestsPanel /> : null}
+            {activeSection === "feedback" ? <FeedbackCenter mode="admin" /> : null}
+          </>
+        ) : (
+          <>
+            {activeSection === "notifications" ? (
+              <NotificationInbox
+                title="Inbox"
+                emptyMessage="No notifications yet."
+                selectedNotificationId={selectedNotificationId}
+                onSelectNotification={selectNotification}
+                actionLabel="Make Request"
+                onAction={() => setView("requests")}
+              />
+            ) : null}
+            {activeSection === "requests" ? <StaffLeaveRequestForm onSubmitted={() => setView("history")} /> : null}
+            {activeSection === "feedback" ? <FeedbackCenter mode="staff" /> : null}
+            {activeSection === "history" ? <StaffRequestsHistory onMakeRequest={() => setView("requests")} /> : null}
+          </>
+        )}
       </div>
-
-      <div className="mb-6 flex items-center justify-between gap-3 rounded-2xl border bg-card p-4 md:hidden">
-        <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Current Section</p>
-          <h2 className="truncate text-lg font-semibold">{activeSectionMeta.label}</h2>
-          <p className="text-sm text-muted-foreground">{activeSectionMeta.description}</p>
-        </div>
-
-        <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="icon">
-              <Menu className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="w-[280px] sm:max-w-[280px]">
-            <SheetHeader>
-              <SheetTitle>Sections</SheetTitle>
-              <SheetDescription>
-                Switch between notifications, requests, and other actions from one clean menu.
-              </SheetDescription>
-            </SheetHeader>
-
-            <div className="mt-6 space-y-2">
-              {sectionOptions.map((section) => (
-                <Button
-                  key={section.value}
-                  variant={activeSection === section.value ? "default" : "ghost"}
-                  className="h-auto w-full justify-start gap-3 px-3 py-3 text-left"
-                  onClick={() => setView(section.value)}
-                >
-                  <section.icon className="h-4 w-4 shrink-0" />
-                  <div>
-                    <div>{section.label}</div>
-                    <div className="text-xs opacity-80">{section.description}</div>
-                  </div>
-                </Button>
-              ))}
-            </div>
-          </SheetContent>
-        </Sheet>
-      </div>
-
-      {isAdmin ? (
-        <>
-          {activeSection === "broadcast" ? <BroadcastComposer /> : null}
-          {activeSection === "notifications" ? (
-            <NotificationInbox
-              title="Admin Inbox"
-              emptyMessage="No notifications have been sent yet."
-              selectedNotificationId={selectedNotificationId}
-              onSelectNotification={selectNotification}
-            />
-          ) : null}
-          {activeSection === "requests" ? <AdminLeaveRequestsPanel /> : null}
-          {activeSection === "feedback" ? <FeedbackCenter mode="admin" /> : null}
-        </>
-      ) : (
-        <>
-          {activeSection === "notifications" ? (
-            <NotificationInbox
-              title="Inbox"
-              emptyMessage="No notifications yet."
-              selectedNotificationId={selectedNotificationId}
-              onSelectNotification={selectNotification}
-              actionLabel="Make Request"
-              onAction={() => setView("requests")}
-            />
-          ) : null}
-
-          {activeSection === "requests" ? (
-            <StaffLeaveRequestForm onSubmitted={() => setView("history")} />
-          ) : null}
-
-          {activeSection === "feedback" ? (
-            <FeedbackCenter mode="staff" />
-          ) : null}
-
-          {activeSection === "history" ? (
-            <StaffRequestsHistory onMakeRequest={() => setView("requests")} />
-          ) : null}
-        </>
-      )}
     </div>
   );
 };
