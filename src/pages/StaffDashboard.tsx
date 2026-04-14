@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { MapPin, Loader2, Briefcase, Coffee, Play, Pause, Power, Clock, TrendingUp, Timer } from "lucide-react";
+import { useLocationPing } from "@/hooks/use-location-ping";
+import { MapPin, Loader2, Briefcase, Coffee, Play, Pause, Power, Clock, TrendingUp, Timer, AlertTriangle } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { getDeviceInfo } from "@/lib/device-info";
 import { getDistanceInMeters } from "@/lib/geo";
@@ -52,6 +53,10 @@ const StaffDashboard = () => {
   const [allowedRadius, setAllowedRadius] = useState<number>(200);
   const [todaySessions, setTodaySessions] = useState<WorkSessionRecord[]>([]);
   const [activeSession, setActiveSession] = useState<WorkSessionRecord | null>(null);
+  const [locationLost, setLocationLost] = useState(false);
+
+  // Background GPS pinging via service worker
+  useLocationPing(activeSession?.id ?? null);
 
   const fetchTodayAttendance = useCallback(async () => {
     if (!user?.id) return;
@@ -125,6 +130,18 @@ const StaffDashboard = () => {
     }, 60000);
     return () => clearInterval(timer);
   }, [fetchSettingsAndDistance]);
+
+  // Listen for location lost events from service worker
+  useEffect(() => {
+    const handler = () => setLocationLost(true);
+    window.addEventListener("location-ping-lost", handler);
+    return () => window.removeEventListener("location-ping-lost", handler);
+  }, []);
+
+  // Clear location lost when session ends
+  useEffect(() => {
+    if (!activeSession) setLocationLost(false);
+  }, [activeSession]);
 
   const handleClockIn = async () => {
     if (!user?.id || typeof latitude !== "number" || typeof longitude !== "number") {
@@ -319,6 +336,22 @@ const StaffDashboard = () => {
           </div>
         </div>
       </header>
+
+      {/* Location lost banner */}
+      {locationLost && (
+        <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5 flex items-center gap-2.5">
+          <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+          <p className="text-sm text-destructive font-medium">
+            Your location is no longer available. This has been logged. Please re-enable location access.
+          </p>
+          <button
+            onClick={() => setLocationLost(false)}
+            className="ml-auto text-destructive/70 hover:text-destructive text-xs underline shrink-0"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Today's Summary — full width, no max-w constraint */}
       <div className="bg-card border-b">

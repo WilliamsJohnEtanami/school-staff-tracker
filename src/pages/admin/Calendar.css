@@ -1,3 +1,105 @@
 .rbc-calendar {
-  height: 600px;
+  font-family: inherit;
+}
+
+.rbc-toolbar {
+  display: none; /* We use our own toolbar */
+}
+
+.rbc-month-view {
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+}
+
+.rbc-header {
+  padding: 8px 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.3);
+}
+
+.rbc-month-row {
+  border-top: 1px solid hsl(var(--border));
+}
+
+.rbc-day-bg + .rbc-day-bg {
+  border-left: 1px solid hsl(var(--border));
+}
+
+.rbc-off-range-bg {
+  background: hsl(var(--muted) / 0.4);
+}
+
+.rbc-today {
+  background: hsl(var(--primary) / 0.06);
+}
+
+.rbc-date-cell {
+  padding: 4px 6px;
+  font-size: 0.8rem;
+}
+
+.rbc-date-cell.rbc-now {
+  font-weight: 700;
+  color: hsl(var(--primary));
+}
+
+.rbc-event {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.rbc-event:focus {
+  outline: none;
+}
+
+.rbc-event.rbc-selected {
+  background: transparent;
+}
+
+.rbc-show-more {
+  font-size: 0.7rem;
+  color: hsl(var(--primary));
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.rbc-agenda-view table.rbc-agenda-table {
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+  background: hsl(var(--muted) / 0.3);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  padding: 8px 12px;
+}
+
+.rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.rbc-agenda-empty {
+  padding: 24px;
+  text-align: center;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+}
+
+/* Drag and drop */
+.rbc-addons-dnd .rbc-addons-dnd-drag-preview {
+  opacity: 0.7;
+}
+
+.rbc-addons-dnd-over {
+  background: hsl(var(--primary) / 0.08);
 }
